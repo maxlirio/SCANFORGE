@@ -44,9 +44,17 @@ Four seams, kept deliberately narrow:
 | Progress events | `packages/shared/src/index.ts` | any provider that can report stages |
 | Pipeline CLI | `pipeline/scanforge/run.py` | a different photogrammetry stack |
 
-Two providers ship:
+Three providers ship:
 
-- **`colmap-local`** (default) — real photogrammetry, runs on this machine, no API
+- **`trellis-local`** (default where available) — Microsoft's TRELLIS.2 (MIT) running on
+  this machine's own GPU via Metal. **One photo** in, a clean ~70k-triangle textured
+  game-ready mesh out, in ~10 minutes on an M4. Free, unlimited, nothing leaves the
+  machine. It *generates* geometry, so it handles plain untextured objects that
+  photogrammetry physically cannot see — and invents the sides your photo never showed.
+  Setup and the bugs worked around: [docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md).
+
+
+- **`colmap-local`** — real photogrammetry, runs on this machine, no API
   key, nothing leaves your network. **Tested end to end.**
 - **`replicate`** (optional) — hosted GPU running TRELLIS (MIT model) for people
   with no GPU. It *generates* geometry rather than measuring it, and the UI labels

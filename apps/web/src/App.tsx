@@ -47,6 +47,7 @@ export default function App() {
   const [recent, setRecent] = useState<Omit<JobRecord, 'logs'>[]>([]);
   const [fatal, setFatal] = useState('');
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const selectedProvider = health?.providers.find((p) => p.id === options.provider);
 
   // Health decides which providers the landing page can offer.
   useEffect(() => {
@@ -172,6 +173,8 @@ export default function App() {
       {screen === 'capture' && (
         <CaptureView
           maxPhotos={health?.maxImages ?? 120}
+          minPhotos={selectedProvider?.minPhotos ?? 8}
+          singleShot={(selectedProvider?.minPhotos ?? 8) <= 1}
           onCancel={() => setScreen('landing')}
           onFinish={(photos) => void handleFinishCapture(photos)}
         />

@@ -29,7 +29,10 @@ export const config = {
   pipelineDir: path.join(REPO_ROOT, 'pipeline'),
   pythonBin: env('SCANFORGE_PYTHON', defaultPython()),
   colmapBin: process.env.COLMAP_BIN ?? '',
-  defaultProvider: env('SCANFORGE_PROVIDER', 'colmap-local'),
+  /** Where the Apple Silicon TRELLIS.2 port lives (see docs/TRELLIS_LOCAL.md). */
+  trellisRoot: env('SCANFORGE_TRELLIS_ROOT',
+    path.join(process.env.HOME ?? '~', '.scanforge', 'trellis-mac')),
+  defaultProvider: env('SCANFORGE_PROVIDER', 'trellis-local'),
   /** Reconstruction is CPU-bound; running two at once just makes both slower. */
   concurrency: envInt('SCANFORGE_CONCURRENCY', 1),
   maxImages: envInt('SCANFORGE_MAX_IMAGES', 250),

@@ -10,6 +10,7 @@ import { LocalStorage } from './storage.js';
 import { JobManager } from './jobs.js';
 import { ColmapLocalProvider } from './providers/colmapLocal.js';
 import { ReplicateProvider } from './providers/replicate.js';
+import { TrellisLocalProvider } from './providers/trellisLocal.js';
 import type { ReconstructionProvider } from './providers/types.js';
 
 const MIME: Record<string, string> = {
@@ -35,17 +36,23 @@ async function main() {
   });
 
   const storage = new LocalStorage(config.dataDir);
-  const providerList: ReconstructionProvider[] = [new ColmapLocalProvider(), new ReplicateProvider()];
+  const providerList: ReconstructionProvider[] = [
+    new TrellisLocalProvider(), new ColmapLocalProvider(), new ReplicateProvider(),
+  ];
   const providers = new Map(providerList.map((p) => [p.id, p]));
   const jobs = new JobManager(storage, providers);
   await jobs.reconcileOnBoot();
 
   app.get('/api/health', async (): Promise<HealthResponse> => {
     const statuses = await Promise.all(providerList.map((p) => p.probe()));
+    // Fall back to whatever this machine can actually run, so the same build
+    // works on a GPU laptop and in the CPU-only container.
+    const configured = statuses.find((s) => s.id === config.defaultProvider && s.available);
+    const usable = configured ?? statuses.find((s) => s.available);
     return {
       ok: statuses.some((s) => s.available),
       version: config.version,
-      defaultProvider: config.defaultProvider,
+      defaultProvider: usable?.id ?? config.defaultProvider,
       providers: statuses,
       maxImages: config.maxImages,
       maxUploadBytes: config.maxUploadBytes,

@@ -164,6 +164,8 @@ export interface ProviderStatus {
   /** True when the provider invents unobserved geometry (AI image-to-3D). */
   generative?: boolean;
   requiresNetwork?: boolean;
+  /** Minimum photos this provider needs. Photogrammetry wants many; AI wants one. */
+  minPhotos?: number;
 }
 
 export interface HealthResponse {

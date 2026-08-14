@@ -21,6 +21,8 @@ export class ColmapLocalProvider implements ReconstructionProvider {
   readonly description =
     'Measures your actual object from your actual photos. Runs entirely on this machine, ' +
     'no API key and nothing leaves the network.';
+  /** Structure-from-motion needs overlapping views; fewer than this cannot solve. */
+  readonly minPhotos = 8;
 
   async probe(): Promise<ProviderStatus> {
     const base: ProviderStatus = {
@@ -30,6 +32,7 @@ export class ColmapLocalProvider implements ReconstructionProvider {
       available: false,
       generative: false,
       requiresNetwork: false,
+      minPhotos: this.minPhotos,
     };
 
     if (!fs.existsSync(path.join(config.pipelineDir, 'scanforge', 'run.py'))) {

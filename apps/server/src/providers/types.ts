@@ -23,6 +23,8 @@ export interface ReconstructionProvider {
   readonly id: string;
   readonly label: string;
   readonly description: string;
+  /** Minimum photographs required; defaults to 8 when unset. */
+  readonly minPhotos?: number;
   probe(): Promise<ProviderStatus>;
   run(ctx: RunContext): Promise<void>;
 }

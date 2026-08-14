@@ -20,11 +20,12 @@ interface Props {
   onFinish(photos: CapturedPhoto[]): void;
   onCancel(): void;
   maxPhotos: number;
+  /** Photogrammetry needs a full circuit; single-image AI needs one good shot. */
+  minPhotos: number;
+  singleShot: boolean;
 }
 
-const MIN_PHOTOS = 8;
-
-export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
+export function CaptureView({ onFinish, onCancel, maxPhotos, minPhotos, singleShot }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<FrameAnalyser | null>(null);
@@ -66,6 +67,14 @@ export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
     () => summarise(cells, photos.length, orientationAvailable),
     [cells, photos.length, orientationAvailable],
   );
+
+  // A single-image model doesn't care about coverage - it cares about one sharp,
+  // well-lit, well-framed photo. Saying otherwise would be theatre.
+  const advice = singleShot
+    ? photos.length === 0
+      ? 'Fill the frame with the object, in even light, and take one sharp photo'
+      : `${photos.length} photo${photos.length === 1 ? '' : 's'} — the sharpest will be used`
+    : summary.advice;
 
   const capture = useCallback((source: 'camera' | 'upload' = 'camera') => {
     const video = videoRef.current;
@@ -231,7 +240,7 @@ export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
   };
 
   const blurryCount = photos.filter((p) => p.sharpness > 0 && p.sharpness < 12).length;
-  const canFinish = photos.length >= MIN_PHOTOS;
+  const canFinish = photos.length >= minPhotos;
 
   return (
     <div className="capture">
@@ -281,15 +290,17 @@ export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
           </div>
 
           <div className="capture__guide">
-            <CoverageDial
-              cells={cells}
-              currentSector={orientation.sector}
-              available={orientationAvailable}
-              sectors={AZIMUTH_SECTORS}
-            />
+            {!singleShot && (
+              <CoverageDial
+                cells={cells}
+                currentSector={orientation.sector}
+                available={orientationAvailable}
+                sectors={AZIMUTH_SECTORS}
+              />
+            )}
             <div className="capture__guideText">
-              <p className="capture__advice">{summary.advice}</p>
-              {!orientationAvailable && (
+              <p className="capture__advice">{advice}</p>
+              {!orientationAvailable && !singleShot && (
                 <p className="capture__note">
                   This device doesn’t report camera direction, so angles aren’t tracked —
                   the count is all we can honestly show.
@@ -354,9 +365,11 @@ export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
 
       <div className="capture__finish">
         <button className="btn btn--primary" disabled={!canFinish} onClick={() => onFinish(photos)}>
-          {canFinish
-            ? `Reconstruct from ${photos.length} photos`
-            : `Need ${MIN_PHOTOS - photos.length} more photo${MIN_PHOTOS - photos.length === 1 ? '' : 's'}`}
+          {!canFinish
+            ? `Need ${minPhotos - photos.length} more photo${minPhotos - photos.length === 1 ? '' : 's'}`
+            : singleShot
+              ? `Generate from ${photos.length === 1 ? 'this photo' : 'the sharpest of ' + photos.length}`
+              : `Reconstruct from ${photos.length} photos`}
         </button>
       </div>
     </div>

@@ -119,13 +119,17 @@ export class JobManager {
     if (!record) throw new Error('job not found');
     if (record.status === 'running' || record.status === 'queued') return record;
 
-    const images = await this.storage.listImages(id);
-    record.imageCount = images.length;
-    if (images.length < 8) {
-      throw new Error(`Need at least 8 photos to reconstruct (received ${images.length}).`);
-    }
     const provider = this.providers.get(record.options.provider);
     if (!provider) throw new Error(`Unknown provider: ${record.options.provider}`);
+
+    const images = await this.storage.listImages(id);
+    record.imageCount = images.length;
+    const needed = provider.minPhotos ?? 8;
+    if (images.length < needed) {
+      throw new Error(
+        `${provider.label} needs at least ${needed} photo${needed === 1 ? '' : 's'} `
+        + `(received ${images.length}).`);
+    }
 
     record.status = 'queued';
     record.stages = freshStages();
