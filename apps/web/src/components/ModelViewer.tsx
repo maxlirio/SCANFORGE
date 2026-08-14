@@ -165,7 +165,12 @@ export function ModelViewer({
       (event) => {
         if (cancelled) return;
         // Only report a fraction when the server sent a length we can trust.
-        setProgress(event.lengthComputable && event.total > 0 ? event.loaded / event.total : null);
+        // With transport compression (GitHub Pages gzips the .glb) `loaded`
+        // counts decompressed bytes while `total` is the compressed length, so
+        // the ratio runs past 1. That is not a number worth showing.
+        const trustworthy =
+          event.lengthComputable && event.total > 0 && event.loaded <= event.total;
+        setProgress(trustworthy ? event.loaded / event.total : null);
       },
       (err) => {
         if (cancelled) return;
