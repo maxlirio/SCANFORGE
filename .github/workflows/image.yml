@@ -47,6 +47,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # conda-forge binaries can be built for a newer CPU baseline than the
+      # host provides, which shows up as SIGILL. Record what we are running on
+      # and which package build we got, so a failure is diagnosable.
+      - name: Environment facts
+        run: |
+          echo "--- runner CPU ---"
+          lscpu | grep -E "^Model name|^Flags" | cut -c1-400
+          for f in avx avx2 avx512f sse4_2 fma; do
+            grep -qw $f /proc/cpuinfo && echo "has $f" || echo "NO  $f"
+          done
+          echo "--- colmap package build ---"
+          docker run --rm --entrypoint /bin/sh \
+            ghcr.io/${{ github.repository_owner }}/scanforge:latest -c \
+            'micromamba list 2>/dev/null | grep -Ei "colmap|openimageio|libboost|ceres" || true'
+          echo "--- does colmap run? ---"
+          docker run --rm --entrypoint /bin/sh \
+            ghcr.io/${{ github.repository_owner }}/scanforge:latest -c \
+            '/opt/conda/bin/colmap -h 2>&1 | head -3; echo "exit=$?"' || true
+
       # Prove the image actually works before anyone pulls it: COLMAP has to
       # run, and the API has to report the provider as available.
       - name: Smoke-test the image
