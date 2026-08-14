@@ -50,6 +50,9 @@ ENV SCANFORGE_DATA_DIR=/tmp/scanforge-data \
     NODE_ENV=production
 RUN mkdir -p /tmp/scanforge-data && chmod 777 /tmp/scanforge-data
 
+# Spaces run the container as uid 1000; match that here so local testing hits
+# the same permissions the Space will.
+USER 1000
 EXPOSE 7860
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "apps/server/dist/index.js"]

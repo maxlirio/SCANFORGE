@@ -72,8 +72,9 @@ export class LocalStorage implements Storage {
   }
 
   async ensureJob(jobId: string): Promise<void> {
+    // `work` is deliberately not created here: the pipeline makes it when it
+    // runs, and every job save would otherwise resurrect it after cleanup.
     await fsp.mkdir(this.imagesDir(jobId), { recursive: true });
-    await fsp.mkdir(this.workDir(jobId), { recursive: true });
     await fsp.mkdir(this.outDir(jobId), { recursive: true });
   }
 
