@@ -28,8 +28,12 @@ FROM mambaorg/micromamba:1.5-bookworm-slim
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
+# curl/git/tar/gzip/procps are not optional extras here: a Codespace bootstraps
+# its VS Code server inside this image and needs them, and the slim base has
+# none of them. Without these the container fails before the app runs, which
+# surfaces only as an unexplained "configuration error".
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates tini \
+      ca-certificates tini curl git tar gzip procps \
     && rm -rf /var/lib/apt/lists/*
 
 # COLMAP (BSD-3) plus the pipeline's Python and the Node runtime, all from

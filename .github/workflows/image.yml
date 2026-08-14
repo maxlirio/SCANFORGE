@@ -65,3 +65,12 @@ jobs:
           print('colmap', p['details']['colmapVersion'], '| tier', p['details']['tier'])
           PY
           docker exec sf /opt/conda/bin/colmap -h | head -1
+
+      # A Codespace bootstraps its editor server inside this image; missing
+      # basics there fail as an unexplained "configuration error".
+      - name: Check the tools a Codespace needs are present
+        run: |
+          for tool in curl git tar gzip bash ps node python3; do
+            docker exec sf sh -lc "command -v $tool" \
+              || { echo "MISSING: $tool"; exit 1; }
+          done
