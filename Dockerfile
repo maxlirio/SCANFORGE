@@ -50,6 +50,10 @@ RUN micromamba install -y -n base -c conda-forge \
       pillow \
     && micromamba clean --all --yes
 ENV PATH=/opt/conda/bin:$PATH
+# A login shell re-reads /etc/profile and would drop the ENV PATH above, hiding
+# node, python and colmap from anything that runs through `sh -l` - which is
+# how Codespaces and most CI shells invoke commands.
+RUN printf 'export PATH=/opt/conda/bin:$PATH\n' > /etc/profile.d/10-scanforge-conda.sh
 
 # HEIC comes straight off iPhones; Pillow needs help to read it.
 RUN pip install --no-cache-dir pillow-heif==0.18.0 || \

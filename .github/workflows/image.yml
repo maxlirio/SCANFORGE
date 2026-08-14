@@ -70,7 +70,9 @@ jobs:
       # basics there fail as an unexplained "configuration error".
       - name: Check the tools a Codespace needs are present
         run: |
-          for tool in curl git tar gzip bash ps node python3; do
-            docker exec sf sh -lc "command -v $tool" \
-              || { echo "MISSING: $tool"; exit 1; }
+          # Check both a plain shell and a login shell: a login shell re-reads
+          # /etc/profile, which is where the PATH to node/python is easily lost.
+          for tool in curl git tar gzip bash ps node python3 colmap; do
+            docker exec sf sh -c  "command -v $tool" || { echo "MISSING (sh): $tool"; exit 1; }
+            docker exec sf sh -lc "command -v $tool" || { echo "MISSING (login shell): $tool"; exit 1; }
           done

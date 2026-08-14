@@ -2,7 +2,9 @@
 # Start the SCANFORGE server inside a Codespace and say clearly what went wrong
 # if it cannot. Safe to re-run at any time:  bash .devcontainer/start.sh
 set -u
+export PATH=/opt/conda/bin:$PATH   # login shells drop this
 SERVER=/app/apps/server/dist/index.js
+NODE=$(command -v node || echo /opt/conda/bin/node)
 
 if [ ! -f "$SERVER" ]; then
   cat <<'MSG'
@@ -19,7 +21,7 @@ fi
 
 pkill -f 'apps/server/dist/index.js' 2>/dev/null || true
 mkdir -p "${SCANFORGE_DATA_DIR:-/data}"
-nohup node "$SERVER" > /tmp/scanforge.log 2>&1 &
+nohup "$NODE" "$SERVER" > /tmp/scanforge.log 2>&1 &
 
 for _ in $(seq 1 40); do
   sleep 1
