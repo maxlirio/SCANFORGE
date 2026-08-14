@@ -41,7 +41,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # openimageio is listed explicitly: the conda-forge colmap 4.1.1 build links
 # against libOpenImageIO.so.3.1 but does not pull it in, so colmap installs
 # "successfully" and then refuses to start.
-RUN micromamba install -y -n base -c conda-forge \
+# CONDA_OVERRIDE_ARCHSPEC pins the resolver to the baseline x86-64 build.
+# Without it conda picks packages for the CPU of whatever machine builds the
+# image; an image built on an AVX-512 host then dies with SIGILL on a plainer
+# CPU (a Codespace VM, a cheap VPS). Observed exactly that in CI: the same
+# Dockerfile passed on one runner and crashed on the next.
+RUN CONDA_OVERRIDE_ARCHSPEC=x86_64 micromamba install -y -n base -c conda-forge \
       colmap=4.1.1 \
       openimageio \
       python=3.11 \

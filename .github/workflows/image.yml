@@ -61,6 +61,10 @@ jobs:
           docker run --rm --entrypoint /bin/sh \
             ghcr.io/${{ github.repository_owner }}/scanforge:latest -c \
             'micromamba list 2>/dev/null | grep -Ei "colmap|openimageio|libboost|ceres" || true'
+          echo "--- archspec the image was resolved against ---"
+          docker run --rm --entrypoint /bin/sh \
+            ghcr.io/${{ github.repository_owner }}/scanforge:latest -c \
+            'micromamba list 2>/dev/null | grep -i "^ *__archspec" || echo "(no archspec pin recorded)"'
           echo "--- does colmap run? ---"
           docker run --rm --entrypoint /bin/sh \
             ghcr.io/${{ github.repository_owner }}/scanforge:latest -c \
