@@ -222,6 +222,9 @@ export class JobManager {
       });
       record.status = 'succeeded';
       record.files = await this.storage.listOutputs(id);
+      // The scratch directory is the bulk of a scan's disk use and is worthless
+      // once the outputs exist.
+      await this.storage.clearWork(id).catch(() => undefined);
       for (const stage of record.stages) {
         if (stage.status === 'active') stage.status = 'done';
       }
@@ -242,11 +245,17 @@ export class JobManager {
       this.running.delete(id);
       record.finishedAt = Date.now();
       await this.publish(record);
+      const pruned = await this.storage.prune(config.jobRetentionDays, config.maxJobs)
+        .catch(() => [] as string[]);
+      if (pruned.length) {
+        console.info(`pruned ${pruned.length} old scan(s)`);
+      }
     }
   }
 
   /** A job left 'running' in storage means the process died under it. */
   async reconcileOnBoot(): Promise<void> {
+    await this.storage.prune(config.jobRetentionDays, config.maxJobs).catch(() => undefined);
     const jobs = await this.storage.listJobs(200);
     for (const job of jobs) {
       if (job.status === 'running' || job.status === 'queued') {

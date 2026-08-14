@@ -22,6 +22,10 @@ export interface Storage {
   listImages(jobId: string): Promise<string[]>;
   listOutputs(jobId: string): Promise<OutputFile[]>;
   outputPath(jobId: string, name: string): string | null;
+  /** Drop a finished job's scratch space, keeping its uploads and outputs. */
+  clearWork(jobId: string): Promise<void>;
+  /** Delete jobs older than `maxAgeDays`, then trim to the newest `maxJobs`. */
+  prune(maxAgeDays: number, maxJobs: number): Promise<string[]>;
   saveJob(record: JobRecord): Promise<void>;
   loadJob(jobId: string): Promise<JobRecord | null>;
   listJobs(limit?: number): Promise<JobRecord[]>;
@@ -114,6 +118,29 @@ export class LocalStorage implements Storage {
     if (!safe) return null;
     const full = path.join(this.outDir(jobId), safe);
     return full.startsWith(this.outDir(jobId)) && fs.existsSync(full) ? full : null;
+  }
+
+  async clearWork(jobId: string): Promise<void> {
+    await fsp.rm(this.workDir(jobId), { recursive: true, force: true });
+  }
+
+  /**
+   * Hosted deployments have small, often ephemeral disks, and a reconstruction
+   * leaves hundreds of megabytes behind. Nothing here touches a job that is
+   * still queued or running.
+   */
+  async prune(maxAgeDays: number, maxJobs: number): Promise<string[]> {
+    const jobs = await this.listJobs(1000);
+    const finished = jobs.filter((j) => j.status !== 'running' && j.status !== 'queued');
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    const doomed = new Set<string>();
+    for (const job of finished) {
+      if (job.createdAt < cutoff) doomed.add(job.id);
+    }
+    const survivors = finished.filter((j) => !doomed.has(j.id));
+    for (const job of survivors.slice(maxJobs)) doomed.add(job.id);
+    for (const id of doomed) await this.deleteJob(id);
+    return [...doomed];
   }
 
   async saveJob(record: JobRecord): Promise<void> {

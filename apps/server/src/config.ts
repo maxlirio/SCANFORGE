@@ -39,6 +39,8 @@ export const config = {
   defaultQuality: env('SCANFORGE_DEFAULT_QUALITY', 'balanced') as 'fast' | 'balanced' | 'high',
   maxUploadBytes: envInt('SCANFORGE_MAX_UPLOAD_BYTES', 32 * 1024 * 1024),
   jobRetentionDays: envInt('SCANFORGE_RETENTION_DAYS', 30),
+  /** Hard cap on stored scans; the oldest are deleted first. */
+  maxJobs: envInt('SCANFORGE_MAX_JOBS', 60),
   replicate: {
     token: env('REPLICATE_API_TOKEN', ''),
     model: env('REPLICATE_MODEL', 'firtoz/trellis'),
