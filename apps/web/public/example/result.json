@@ -1,17 +1,18 @@
 {
-  "tier": "sparse",
+  "tier": "trellis2-local-mps",
   "quality": "balanced",
   "mode": "object",
   "matcher": "exhaustive",
-  "photosSubmitted": 30,
-  "photosUsed": 30,
-  "photosRegistered": 24,
-  "points": 3315,
-  "vertices": 1970,
-  "triangles": 3798,
+  "photosSubmitted": 1,
+  "photosUsed": 1,
+  "photosRegistered": 1,
+  "points": 0,
+  "vertices": 146879,
+  "triangles": 111028,
   "textured": true,
   "glbBytes": 1113408,
-  "durationSeconds": 21.3,
+  "durationSeconds": 787,
   "scaleNote": "normalised so the longest side is 1.0; photogrammetry has no absolute scale",
-  "upAxisConfidence": 0.464
+  "upAxisConfidence": 0.464,
+  "generative": true
 }
