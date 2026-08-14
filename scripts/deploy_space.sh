@@ -13,8 +13,12 @@ SPACE_NAME=${1:-scanforge}
 # The CLI often lands in a per-user bin dir that isn't on PATH.
 export PATH="$HOME/Library/Python/3.9/bin:$HOME/.local/bin:$PATH"
 command -v hf >/dev/null || { echo "The huggingface CLI is missing: pip install -U huggingface_hub"; exit 1; }
-USER_NAME=$(hf auth whoami 2>/dev/null | head -1 | tr -d '\r') || true
-if [ -z "${USER_NAME}" ] || [ "${USER_NAME}" = "Not logged in" ]; then
+# `hf auth whoami` prints "user: <name>" with ANSI colour; strip both.
+USER_NAME=$(hf auth whoami 2>/dev/null \
+  | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/^user:[[:space:]]*//' \
+  | head -1 | tr -d '\r')
+[ "${USER_NAME}" = "Not logged in" ] && USER_NAME=""
+if [ -z "${USER_NAME}" ]; then
   echo "Not logged in. Run:  hf auth login"
   exit 1
 fi

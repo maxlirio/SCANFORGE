@@ -164,12 +164,24 @@ website *and* runs COLMAP, on one origin (no CORS, no mixed-content). COLMAP 4.1
 comes from conda-forge, which publishes a Linux build — distro packages are still
 on 3.x and lack the CPU meshing and texturing this design depends on.
 
+Free always-on hosting with enough CPU for photogrammetry has essentially
+disappeared. Checked 2026-08-14, by trying to deploy rather than by reading
+marketing pages:
+
 | Host | Cost | Fit |
 |---|---|---|
-| **Hugging Face Spaces (CPU basic)** | free, no card | 2 vCPU / 16 GB, Docker, public HTTPS. Ephemeral storage, sleeps when idle. **Recommended.** |
-| Fly.io / Railway / a VPS | ~$5–10/mo | faster, always on, persistent disk |
-| Render free tier | free | 512 MB RAM — too small for COLMAP |
+| Hugging Face Spaces | **$9/mo (PRO)** | Docker and Gradio Spaces on cpu-basic now require PRO — the API returns `402 Payment Required`. Only *static* Spaces are free, which cannot run COLMAP. |
+| Render free | free, no card | 512 MB RAM and **0.1 vCPU** — a scan that takes 2 minutes here would take most of an hour, if it didn't run out of memory first |
+| Koyeb free | free, no card | 512 MB RAM, one service. Same memory problem. |
+| Fly.io | ~$2–5/mo | free tier retired in 2024; a 1 GB machine is cheap and always on |
+| **A small VPS** (Hetzner, DigitalOcean) | **~$5/mo** | 2 vCPU / 4 GB, always on, persistent disk. **Best value for a permanent site.** |
+| **GitHub Codespaces** | free (120 core-hours/mo) | 2 vCPU / 8 GB — by far the best *free* compute, and needs no new account. But it is a session, not a site: 30-minute idle timeout (raisable to 4 h) and a new URL each time. |
+| Google Cloud Run | free tier, card required | scales to zero, but its filesystem is RAM-backed, which fights a pipeline that writes hundreds of MB of scratch |
 | Hosted GPU API (Tripo/Meshy/Replicate) | per scan | seconds instead of minutes, but it *generates* geometry rather than measuring yours |
+
+The workload is the thing that rules the free tiers out: photogrammetry wants
+~1–2 GB of RAM and real cores for a few minutes. 512 MB at 0.1 vCPU is not a
+smaller version of that, it is a different thing that fails.
 
 GitHub Pages keeps serving the frontend as a mirror, pointed at whichever backend
 is deployed. It cannot host the backend itself — it serves static files only.

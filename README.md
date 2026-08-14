@@ -64,21 +64,23 @@ docker build -t scanforge .
 docker run -p 7860:7860 -v scanforge-data:/data scanforge
 ```
 
-**Free, no card — Hugging Face Spaces** (2 vCPU, 16 GB, public HTTPS URL):
+### Where to run it
 
-```bash
-pip install -U huggingface_hub
-hf auth login
-scripts/deploy_space.sh scanforge
-```
+Reconstruction wants ~1–2 GB of RAM and real cores for a few minutes, which rules
+out most "free" tiers (512 MB at 0.1 vCPU is not a smaller version of this — it
+fails). Checked by deploying, 2026-08-14:
 
-Then open `https://<user>-scanforge.hf.space` on your phone and add it to your home
-screen. The Space builds from this GitHub repo, so a rebuild picks up new commits.
-Storage there is ephemeral — download your model when the scan finishes.
+| Host | Cost | Notes |
+|---|---|---|
+| **A small VPS** (Hetzner/DigitalOcean) | ~$5/mo | 2 vCPU / 4 GB, always on, persistent disk. Best for a permanent site. |
+| **GitHub Codespaces** | free, 120 core-h/mo | Best free compute and no new account, but it is a session: 30-min idle timeout, new URL each time. `.devcontainer/` is set up for it. |
+| Fly.io | ~$2–5/mo | free tier retired in 2024 |
+| Hugging Face Spaces | $9/mo (PRO) | Docker Spaces are **no longer free** — the create call returns `402 Payment Required`. `scripts/deploy_space.sh` works if you have PRO. |
+| Render / Koyeb free | free | 512 MB RAM — too small |
 
-Anywhere else that runs a container (Fly.io, Railway, a VPS) works the same way;
-set `PORT` and mount a volume at `/data` if you want scans to survive restarts.
-Render's free tier has 512 MB of RAM, which is not enough for COLMAP.
+On any of them: `PORT` is respected, and mounting a volume at `/data` keeps scans
+across restarts. GitHub Pages can serve the frontend and be pointed at whichever
+backend you run.
 
 ---
 
