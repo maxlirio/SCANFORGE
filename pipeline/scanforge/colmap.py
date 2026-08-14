@@ -63,7 +63,14 @@ def probe() -> ColmapCapabilities:
         return ColmapCapabilities(False, path=path, error=str(exc))
     text = (out.stdout or "") + (out.stderr or "")
     first = next((ln for ln in text.splitlines() if ln.startswith("COLMAP ")), "")
-    version = first.split(" ")[1] if first else "unknown"
+    if not first:
+        # It exists but will not run - a missing shared library, a bad build, a
+        # wrong architecture. Reporting "available" here would mean every scan
+        # failed deep in the pipeline instead of on the health check.
+        detail = next((ln for ln in reversed(text.strip().splitlines()) if ln.strip()),
+                      f"exit code {out.returncode}")
+        return ColmapCapabilities(False, path=path, error=f"colmap will not run: {detail[:300]}")
+    version = first.split(" ")[1]
     # COLMAP prints "... with CUDA" or "... without CUDA" in its banner.
     cuda = ("without CUDA" not in first) and ("with CUDA" in first)
     return ColmapCapabilities(True, version=version, cuda=cuda, path=path)

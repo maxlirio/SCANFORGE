@@ -302,7 +302,7 @@ export function CaptureView({ onFinish, onCancel, maxPhotos }: Props) {
 
       <div className="capture__controls">
         <label className="btn btn--ghost">
-          Upload
+          {cameraState === 'live' ? 'Upload' : 'Add photos'}
           <input
             type="file"
             accept="image/*"

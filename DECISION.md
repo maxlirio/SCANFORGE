@@ -69,6 +69,13 @@ no local GPU. All require an account and an API key, and send the user's photos 
 
 ## 3. Where should reconstruction run?
 
+> **Requirement change (2026-08-14):** this has to be a website you open on any
+> phone or iPad, with no laptop running. That does not change *which* technology
+> reconstructs — it changes *where the server lives*: a hosted container instead
+> of a developer machine. The browser still cannot do the reconstruction (see
+> below), so "no backend at all" was never on the table; the honest options were
+> "a backend someone hosts" or "a third-party GPU API". See §7.
+
 **Not in the browser.** SfM/MVS is hours of CPU work with multi-GB working sets; WebAssembly ports of
 COLMAP-class SfM don't exist at usable quality, and WebGPU can't reach the CUDA kernels the AI models
 are compiled against. A browser tab also can't survive being backgrounded on a phone mid-scan.
@@ -142,3 +149,27 @@ hosted GPU and the same frontend gets dense-stereo or AI-grade results with no f
 | OpenMVS (optional, operator-installed) | **AGPL-3.0** | if enabled and offered over a network, source-disclosure obligations attach — kept out of the default build for this reason |
 
 No non-commercially-licensed model weights are used anywhere in the default path.
+
+## 7. Hosting: making it a website, not a local tool
+
+A phone-only, backend-free version does not exist. Structure-from-motion needs
+minutes of multi-core CPU and gigabytes of working set; WebAssembly SfM ports are
+toy-grade; and iOS Safari exposes no WebXR/ARKit poses to fall back on. Feed-forward
+image-to-3D networks are ~1B parameters — far past what a phone browser can hold.
+So the reconstruction runs in a hosted container, and the phone is a camera and a
+viewer.
+
+The container is the deliverable: `Dockerfile` builds one image that serves the
+website *and* runs COLMAP, on one origin (no CORS, no mixed-content). COLMAP 4.1
+comes from conda-forge, which publishes a Linux build — distro packages are still
+on 3.x and lack the CPU meshing and texturing this design depends on.
+
+| Host | Cost | Fit |
+|---|---|---|
+| **Hugging Face Spaces (CPU basic)** | free, no card | 2 vCPU / 16 GB, Docker, public HTTPS. Ephemeral storage, sleeps when idle. **Recommended.** |
+| Fly.io / Railway / a VPS | ~$5–10/mo | faster, always on, persistent disk |
+| Render free tier | free | 512 MB RAM — too small for COLMAP |
+| Hosted GPU API (Tripo/Meshy/Replicate) | per scan | seconds instead of minutes, but it *generates* geometry rather than measuring yours |
+
+GitHub Pages keeps serving the frontend as a mirror, pointed at whichever backend
+is deployed. It cannot host the backend itself — it serves static files only.

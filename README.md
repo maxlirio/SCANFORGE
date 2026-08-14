@@ -1,10 +1,15 @@
 # SCANFORGE
 
-Turn photographs of a real object into a textured 3D model, in the browser.
+Turn photographs of a real object into a textured 3D model, from your phone.
 
-Open the site, press **Start scan**, walk around an object with your phone taking
-photos (or upload photos you already have), and the server reconstructs a textured
-mesh you can rotate, inspect and download as GLB / OBJ / PLY.
+Open the site on a phone or iPad, press **Start scan**, walk around an object taking
+photos (or upload photos you already have), and it reconstructs a textured mesh you
+can rotate, inspect and download as GLB / OBJ / PLY. It installs to the home screen
+and runs full-screen like an app.
+
+Reconstruction runs on a hosted server, not on your device and not on a laptop —
+it is minutes of multi-core CPU work that no phone browser can do. One container
+serves the website and does the reconstruction: see **Deploying** below.
 
 The reconstruction is real photogrammetry — [COLMAP](https://colmap.github.io/)
 solving where each photograph was taken from, building a surface from the points it
@@ -47,6 +52,33 @@ Two providers ship:
   with no GPU. It *generates* geometry rather than measuring it, and the UI labels
   any such result. **Implemented against Replicate's documented API but never
   executed here** — that needs a funded account. Treat it as unverified.
+
+---
+
+## Deploying (so a phone can actually use it)
+
+One image serves the site and reconstructs. It needs ~2 GB RAM and no GPU.
+
+```bash
+docker build -t scanforge .
+docker run -p 7860:7860 -v scanforge-data:/data scanforge
+```
+
+**Free, no card — Hugging Face Spaces** (2 vCPU, 16 GB, public HTTPS URL):
+
+```bash
+pip install -U huggingface_hub
+hf auth login
+scripts/deploy_space.sh scanforge
+```
+
+Then open `https://<user>-scanforge.hf.space` on your phone and add it to your home
+screen. The Space builds from this GitHub repo, so a rebuild picks up new commits.
+Storage there is ephemeral — download your model when the scan finishes.
+
+Anywhere else that runs a container (Fly.io, Railway, a VPS) works the same way;
+set `PORT` and mount a volume at `/data` if you want scans to survive restarts.
+Render's free tier has 512 MB of RAM, which is not enough for COLMAP.
 
 ---
 
