@@ -18,6 +18,10 @@ export function Landing({ health, healthError, options, onOptions, onStart, rece
   const provider = health?.providers.find((p) => p.id === options.provider);
   const ready = Boolean(provider?.available);
   const [apiInput, setApiInput] = useState(getApiBase());
+  // A single-image model needs one good photo; photogrammetry needs a circuit.
+  // Until a server says otherwise, describe the single-photo flow, which is what
+  // the default build runs.
+  const singleShot = (provider?.minPhotos ?? 1) <= 1;
   const problem = backendProblem(getApiBase());
   const needsBackend = Boolean(healthError) || IS_STATIC_BUILD || Boolean(problem);
 
@@ -26,8 +30,9 @@ export function Landing({ health, healthError, options, onOptions, onStart, rece
       <header className="landing__hero">
         <h1>SCANFORGE</h1>
         <p className="landing__tagline">
-          Photograph a real object from every side and get back a textured 3D model
-          you can spin, inspect and download.
+          {singleShot
+            ? 'Photograph an object and get back a textured, game-ready 3D model you can spin, inspect and download.'
+            : 'Photograph a real object from every side and get back a textured 3D model you can spin, inspect and download.'}
         </p>
         <button className="btn btn--primary btn--large" onClick={onStart} disabled={!ready}>
           Start scan
@@ -46,31 +51,63 @@ export function Landing({ health, healthError, options, onOptions, onStart, rece
 
       <section className="landing__how">
         <h2>How it works</h2>
-        <ol>
-          <li><strong>Capture.</strong> Walk all the way around the object taking 25–60 photos, keeping it in frame.</li>
-          <li><strong>Reconstruct.</strong> The server solves where every photo was taken from, builds a surface, and paints your photographs onto it.</li>
-          <li><strong>Download.</strong> GLB, OBJ or PLY, with the texture.</li>
-        </ol>
+        {singleShot ? (
+          <ol>
+            <li><strong>Photograph it once.</strong> Fill the frame with the object in even light. One sharp photo is enough.</li>
+            <li><strong>Generate.</strong> An AI model builds a clean, textured mesh from that view — including the sides it never saw.</li>
+            <li><strong>Download.</strong> A game-ready GLB, plus PLY.</li>
+          </ol>
+        ) : (
+          <ol>
+            <li><strong>Capture.</strong> Walk all the way around the object taking 25–60 photos, keeping it in frame.</li>
+            <li><strong>Reconstruct.</strong> The server solves where every photo was taken from, builds a surface, and paints your photographs onto it.</li>
+            <li><strong>Download.</strong> GLB, OBJ or PLY, with the texture.</li>
+          </ol>
+        )}
+        <p className="field__help">
+          {singleShot
+            ? 'This generates geometry rather than measuring it: the result is a plausible '
+              + 'version of your object, which is usually what you want for a game asset. '
+              + 'Connect a photogrammetry server instead if you need real measurements.'
+            : 'This measures your actual object from your actual photos. Nothing is invented — '
+              + 'but surfaces with no visible texture cannot be tracked.'}
+        </p>
       </section>
 
       <section className="landing__tips">
-        <h2>What scans well</h2>
+        <h2>What works</h2>
         <div className="tips">
           <div className="tips__good">
             <h3>Works</h3>
-            <ul>
-              <li>Matte, textured surfaces — fabric, stone, wood, printed packaging</li>
-              <li>Even, bright, diffuse light with soft shadows</li>
-              <li>An object that stays still while you move around it</li>
-            </ul>
+            {singleShot ? (
+              <ul>
+                <li>A single object filling most of the frame</li>
+                <li>Plain, untextured things — a white cube is fine here</li>
+                <li>Even light, and a background the object stands out from</li>
+              </ul>
+            ) : (
+              <ul>
+                <li>Matte, textured surfaces — fabric, stone, wood, printed packaging</li>
+                <li>Even, bright, diffuse light with soft shadows</li>
+                <li>An object that stays still while you move around it</li>
+              </ul>
+            )}
           </div>
           <div className="tips__bad">
             <h3>Fights back</h3>
-            <ul>
-              <li>Shiny, glassy, transparent or mirror-like surfaces</li>
-              <li>Plain untextured colour — a white mug has nothing to track</li>
-              <li>Moving the object between shots, or a plain empty background</li>
-            </ul>
+            {singleShot ? (
+              <ul>
+                <li>Several objects at once — it models one thing</li>
+                <li>Heavy clutter the object blends into</li>
+                <li>Anything needing true dimensions: the scale is invented</li>
+              </ul>
+            ) : (
+              <ul>
+                <li>Shiny, glassy, transparent or mirror-like surfaces</li>
+                <li>Plain untextured colour — a white mug has nothing to track</li>
+                <li>Moving the object between shots, or a plain empty background</li>
+              </ul>
+            )}
           </div>
         </div>
       </section>
