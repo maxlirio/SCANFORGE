@@ -1,0 +1,10 @@
+example/model.glb
+
+This is a 3D reconstruction produced by the SCANFORGE pipeline (COLMAP sparse
+tier) from 30 photographs of a stone Buddha statue.
+
+Source photographs: https://github.com/alicevision/dataset_buddha
+Licence of the source photographs: CC-BY-4.0 (© AliceVision contributors)
+
+This model is a derivative work of those photographs and is therefore also
+distributed under CC-BY-4.0, with attribution to AliceVision.

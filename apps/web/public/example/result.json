@@ -1,0 +1,17 @@
+{
+  "tier": "sparse",
+  "quality": "balanced",
+  "mode": "object",
+  "matcher": "exhaustive",
+  "photosSubmitted": 30,
+  "photosUsed": 30,
+  "photosRegistered": 24,
+  "points": 3315,
+  "vertices": 1970,
+  "triangles": 3798,
+  "textured": true,
+  "glbBytes": 1113408,
+  "durationSeconds": 21.3,
+  "scaleNote": "normalised so the longest side is 1.0; photogrammetry has no absolute scale",
+  "upAxisConfidence": 0.464
+}

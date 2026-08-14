@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Job storage, scratch space and downloaded test photos - all reproducible.
+data/
+!data/.gitkeep
+
+pipeline/.venv/
+__pycache__/
+*.pyc
+
+.env
+.DS_Store
