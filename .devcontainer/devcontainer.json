@@ -1,0 +1,16 @@
+{
+  "name": "SCANFORGE",
+  "//": "Runs the real reconstruction backend in a Codespace. Forward port 7860 as public and a phone can use it - no new accounts, just GitHub.",
+  "build": { "dockerfile": "../Dockerfile", "context": ".." },
+  "overrideCommand": true,
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": { "label": "SCANFORGE", "onAutoForward": "notify", "visibility": "public" }
+  },
+  "postStartCommand": "nohup node /app/apps/server/dist/index.js > /tmp/scanforge.log 2>&1 &",
+  "remoteEnv": {
+    "SCANFORGE_DATA_DIR": "/data",
+    "SCANFORGE_DEFAULT_QUALITY": "fast",
+    "SCANFORGE_EXHAUSTIVE_MAX": "35"
+  }
+}
