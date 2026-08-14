@@ -91,6 +91,7 @@ export class ColmapLocalProvider implements ReconstructionProvider {
       '--quality', ctx.options.quality,
       '--mode', ctx.options.mode,
       '--max-images', String(config.maxImages),
+      '--exhaustive-max', String(config.exhaustiveMax),
     ];
     if (ctx.options.matcher && ctx.options.matcher !== 'auto') {
       args.push('--matcher', ctx.options.matcher);

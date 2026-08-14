@@ -33,6 +33,10 @@ export const config = {
   /** Reconstruction is CPU-bound; running two at once just makes both slower. */
   concurrency: envInt('SCANFORGE_CONCURRENCY', 1),
   maxImages: envInt('SCANFORGE_MAX_IMAGES', 250),
+  /** Photos above this count switch to sequential matching (O(n) not O(n^2)). */
+  exhaustiveMax: envInt('SCANFORGE_EXHAUSTIVE_MAX', 80),
+  /** Default quality offered to new scans; small hosts should say 'fast'. */
+  defaultQuality: env('SCANFORGE_DEFAULT_QUALITY', 'balanced') as 'fast' | 'balanced' | 'high',
   maxUploadBytes: envInt('SCANFORGE_MAX_UPLOAD_BYTES', 32 * 1024 * 1024),
   jobRetentionDays: envInt('SCANFORGE_RETENTION_DAYS', 30),
   replicate: {

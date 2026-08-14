@@ -49,6 +49,7 @@ async function main() {
       providers: statuses,
       maxImages: config.maxImages,
       maxUploadBytes: config.maxUploadBytes,
+      defaultQuality: config.defaultQuality,
     };
   });
 

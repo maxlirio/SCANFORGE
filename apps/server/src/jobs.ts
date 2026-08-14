@@ -45,7 +45,7 @@ export class JobManager {
       updatedAt: now,
       options: {
         provider: options.provider ?? config.defaultProvider,
-        quality: options.quality ?? 'balanced',
+        quality: options.quality ?? config.defaultQuality,
         mode: options.mode ?? 'object',
         matcher: options.matcher ?? 'auto',
       },

@@ -173,6 +173,8 @@ export interface HealthResponse {
   providers: ProviderStatus[];
   maxImages: number;
   maxUploadBytes: number;
+  /** What this server recommends, given its own hardware. */
+  defaultQuality: 'fast' | 'balanced' | 'high';
 }
 
 export const DEFAULT_STAGES: { id: StageId; group: StageGroup; label: string }[] = [

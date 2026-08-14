@@ -80,6 +80,10 @@ def main() -> int:
     ap.add_argument("--matcher", choices=["auto", "exhaustive", "sequential"], default="auto")
     ap.add_argument("--features", choices=["SIFT", "ALIKED"], default="SIFT")
     ap.add_argument("--max-images", type=int, default=250)
+    # Exhaustive matching is O(n^2) and dominates the run on a small host.
+    # Above this many photos, fall back to sequential matching, which assumes
+    # the photos are in capture order - true for this app's capture screen.
+    ap.add_argument("--exhaustive-max", type=int, default=80)
     ap.add_argument("--keep-work", action="store_true")
     args = ap.parse_args()
 
@@ -116,7 +120,8 @@ def main() -> int:
     db_path = os.path.join(args.work, "database.db")
     colmap.extract_features(db_path, prepared_dir, log_dir, feature_type=args.features,
                             max_image_size=max_edge, max_features=max_features)
-    sequential = (args.matcher == "sequential") or (args.matcher == "auto" and len(kept) > 80)
+    sequential = (args.matcher == "sequential") or (
+        args.matcher == "auto" and len(kept) > args.exhaustive_max)
     colmap.match_features(db_path, log_dir, len(kept), sequential=sequential)
 
     sparse_dir = os.path.join(args.work, "sparse")

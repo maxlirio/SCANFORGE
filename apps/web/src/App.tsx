@@ -53,7 +53,11 @@ export default function App() {
     api.health()
       .then((h) => {
         setHealth(h);
-        setOptions((prev) => ({ ...prev, provider: h.defaultProvider || prev.provider }));
+        setOptions((prev) => ({
+          ...prev,
+          provider: h.defaultProvider || prev.provider,
+          quality: h.defaultQuality ?? prev.quality,
+        }));
       })
       .catch((err: Error) => setHealthError(`Cannot reach the server: ${err.message}`));
     api.listJobs().then(setRecent).catch(() => undefined);
