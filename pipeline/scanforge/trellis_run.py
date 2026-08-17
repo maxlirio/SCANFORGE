@@ -79,6 +79,30 @@ def pick_best_photo(images_dir: str) -> tuple[str, dict]:
                   "reports": reports[:60]}
 
 
+def _unwrap_with_deadline(work_dir: str, verts, faces, timeout: float):
+    """Unwrap in a subprocess. Returns None if it exceeds `timeout` seconds."""
+    import subprocess
+    import numpy as _np
+
+    os.makedirs(work_dir, exist_ok=True)
+    src = os.path.join(work_dir, "unwrap_in.npz")
+    dst = os.path.join(work_dir, "unwrap_out.npz")
+    _np.savez(src, verts=verts, faces=faces)
+    started = time.time()
+    try:
+        subprocess.run([sys.executable, "-m", "scanforge.uv_unwrap", src, dst],
+                       check=True, timeout=timeout, capture_output=True)
+    except subprocess.TimeoutExpired:
+        events.log(f"UV unwrap exceeded {timeout:.0f}s and was stopped.", level="warn")
+        return None
+    except subprocess.CalledProcessError as exc:
+        events.log(f"UV unwrap failed: {(exc.stderr or b'').decode()[-300:]}", level="warn")
+        return None
+    data = _np.load(dst)
+    events.log(f"UV unwrap took {time.time() - started:.0f}s")
+    return data["verts"], data["faces"], data["uvs"]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="scanforge-trellis")
     ap.add_argument("--images", required=True)
@@ -143,9 +167,8 @@ def main() -> int:
     events.stage_end("meshing", f"{faces.shape[0]:,} triangles generated", gen_seconds)
 
     # ---- decimate, unwrap, texture -----------------------------------------
-    events.stage_start("texturing", "Building the texture", determinate=False)
+    events.stage_start("texturing", "Simplifying the mesh", determinate=False)
     t0 = time.time()
-    import xatlas
 
     if len(faces) > target_faces:
         import fast_simplification
@@ -154,29 +177,45 @@ def main() -> int:
             verts.astype(np.float32), faces.astype(np.int32), ratio)
         events.log(f"Decimated to {len(faces):,} triangles for game-engine use.")
 
-    vmapping, indices, uvs = xatlas.parametrize(
-        np.ascontiguousarray(verts, dtype=np.float32),
-        np.ascontiguousarray(faces, dtype=np.uint32))
-    uv_verts = verts[vmapping]
-    uv_faces = indices.reshape(-1, 3)
-
     has_color = getattr(mesh_out, "attrs", None) is not None
-    texture_bytes = None
+    voxel_args = None
     if has_color:
-        vertex_rgb = vertex_colors_from_voxels(
-            uv_verts,
-            mesh_out.coords.cpu().numpy(),
-            mesh_out.attrs.cpu().float().numpy(),
-            mesh_out.origin.cpu().numpy(),
-            float(mesh_out.voxel_size))
-        atlas, _ = bake_atlas(uv_verts, uv_faces, uvs, vertex_rgb, texture_size=texture_size)
-        Image.fromarray(atlas).save(os.path.join(args.out, "texture.jpg"),
-                                    "JPEG", quality=92, subsampling=1)
-        with open(os.path.join(args.out, "texture.jpg"), "rb") as fh:
-            texture_bytes = fh.read()
+        voxel_args = (mesh_out.coords.cpu().numpy(),
+                      mesh_out.attrs.cpu().float().numpy(),
+                      mesh_out.origin.cpu().numpy(),
+                      float(mesh_out.voxel_size))
     else:
         events.warn("The model produced no colour data; exporting untextured geometry.")
-    events.stage_end("texturing", "Texture built", time.time() - t0)
+
+    # UV unwrapping runs in a subprocess under a deadline: xatlas is unbounded and
+    # has been seen spending over an hour on a mesh that normally takes seconds.
+    # A C extension cannot be interrupted in-process, hence the separate process.
+    uv_verts, uv_faces, uvs = verts, faces, None
+    if has_color:
+        events.stage_progress("texturing", None, "Laying out the texture (UV unwrap)")
+        uv = _unwrap_with_deadline(args.work or args.out, verts, faces,
+                                  timeout=float(os.environ.get("SCANFORGE_UV_TIMEOUT", 300)))
+        if uv is not None:
+            uv_verts, uv_faces, uvs = uv
+        else:
+            events.warn("UV unwrapping took too long; exporting per-vertex colour "
+                        "instead of a texture atlas. The model is unaffected, but it "
+                        "carries vertex colours rather than an image.")
+
+    texture_bytes = None
+    vertex_rgb = None
+    if has_color:
+        assert voxel_args is not None
+        vertex_rgb = vertex_colors_from_voxels(uv_verts, *voxel_args)
+        if uvs is not None:
+            events.stage_progress("texturing", None, "Baking the texture")
+            atlas, _ = bake_atlas(uv_verts, uv_faces, uvs, vertex_rgb, texture_size=texture_size)
+            Image.fromarray(atlas).save(os.path.join(args.out, "texture.jpg"),
+                                        "JPEG", quality=92, subsampling=1)
+            with open(os.path.join(args.out, "texture.jpg"), "rb") as fh:
+                texture_bytes = fh.read()
+    events.stage_end("texturing", "Texture built" if texture_bytes else "Colour applied",
+                     time.time() - t0)
 
     # ---- export -------------------------------------------------------------
     events.stage_start("packaging", "Writing downloadable files", determinate=False)
@@ -197,6 +236,8 @@ def main() -> int:
         # must NOT be flipped again on the way out.
         face_uvs=uvs[uv_faces] if texture_bytes is not None else None,
         texture_bytes=texture_bytes, texture_mime="image/jpeg",
+        vertex_colors=None if texture_bytes is not None else (
+            (vertex_rgb * 255).astype(np.uint8) if vertex_rgb is not None else None),
         name="scan", flip_v=False)
     ply_writer.write_mesh(os.path.join(args.out, "model.ply"), export_verts, uv_faces)
 

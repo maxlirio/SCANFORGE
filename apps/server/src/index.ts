@@ -87,6 +87,7 @@ async function main() {
       maxImages: config.maxImages,
       maxUploadBytes: config.maxUploadBytes,
       defaultQuality: config.defaultQuality,
+      machine: config.machine,
     };
   });
 

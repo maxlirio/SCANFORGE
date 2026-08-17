@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -52,6 +53,11 @@ export const config = {
     pollMs: envInt('REPLICATE_POLL_MS', 3000),
   },
   version: '0.1.0',
+  machine: {
+    memoryGb: Math.round(os.totalmem() / 1024 ** 3),
+    arch: process.arch,
+    cpus: os.cpus().length,
+  },
 };
 
 export type Config = typeof config;

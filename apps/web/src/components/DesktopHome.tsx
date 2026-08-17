@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HealthResponse, JobOptions, JobRecord } from '@scanforge/shared';
+import { QUALITY_MEMORY_GB } from '@scanforge/shared';
 import { api } from '../lib/api';
 import { bridge, fileFromPath } from '../lib/desktop';
 import { analyseImageFile } from '../lib/frameQuality';
@@ -39,6 +40,8 @@ export function DesktopHome({
   const provider = health?.providers.find((p) => p.id === options.provider);
   const ready = Boolean(provider?.available);
   const singleShot = (provider?.minPhotos ?? 1) <= 1;
+  const memoryGb = health?.machine?.memoryGb ?? 0;
+  const tooBig = memoryGb > 0 && memoryGb < QUALITY_MEMORY_GB[options.quality];
 
   const [autoGenerate, setAutoGenerate] = useState(false);
 
@@ -162,15 +165,27 @@ export function DesktopHome({
                 value={options.quality}
                 onChange={(e) => onOptions({ ...options, quality: e.target.value as JobOptions['quality'] })}
               >
-                <option value="fast">Fast</option>
-                <option value="balanced">Balanced</option>
-                <option value="high">High</option>
+                {(['fast', 'balanced', 'high'] as const).map((q) => {
+                  const needs = QUALITY_MEMORY_GB[q];
+                  const short = memoryGb > 0 && memoryGb < needs;
+                  return (
+                    <option key={q} value={q} disabled={short}>
+                      {q === 'fast' ? 'Fast' : q === 'balanced' ? 'Balanced' : 'High'}
+                      {short ? ` — needs ${needs} GB` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </label>
-            <span className="picked__note">{QUALITY_NOTES[options.quality]}</span>
+            <span className="picked__note">
+              {tooBig
+                ? `This Mac has ${memoryGb} GB of memory; that setting needs about `
+                  + `${QUALITY_MEMORY_GB[options.quality]} GB and would swap for hours.`
+                : QUALITY_NOTES[options.quality]}
+            </span>
             <button
               className="btn btn--primary"
-              disabled={!ready || photos.length < (provider?.minPhotos ?? 1)}
+              disabled={!ready || tooBig || photos.length < (provider?.minPhotos ?? 1)}
               onClick={() => onGenerate(photos)}
             >
               {singleShot && photos.length > 1

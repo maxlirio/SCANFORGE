@@ -177,7 +177,20 @@ export interface HealthResponse {
   maxUploadBytes: number;
   /** What this server recommends, given its own hardware. */
   defaultQuality: 'fast' | 'balanced' | 'high';
+  machine: { memoryGb: number; arch: string; cpus: number };
 }
+
+/**
+ * Memory a quality setting actually needs. `high` runs the 1024 pipeline, which
+ * wants more than a 16 GB machine has: it does not run slower there, it thrashes
+ * swap for hours. Measured on an M4/16 GB - balanced completes in ~13 minutes,
+ * high was cancelled at 71 minutes having done 2 of 12 steps of one phase.
+ */
+export const QUALITY_MEMORY_GB: Record<'fast' | 'balanced' | 'high', number> = {
+  fast: 8,
+  balanced: 16,
+  high: 24,
+};
 
 export const DEFAULT_STAGES: { id: StageId; group: StageGroup; label: string }[] = [
   { id: 'preparing', group: 'preparing', label: 'Checking and resizing photos' },
