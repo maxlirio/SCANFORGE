@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { HealthResponse, JobOptions, JobRecord } from '@scanforge/shared';
 import { api } from '../lib/api';
-import { DEMO_MODEL_URL, IS_STATIC_BUILD, backendProblem, getApiBase, setApiBase } from '../lib/backend';
+import { IS_STATIC_BUILD, backendProblem, getApiBase, setApiBase } from '../lib/backend';
 
 interface Props {
   health: HealthResponse | null;
@@ -11,10 +11,9 @@ interface Props {
   onStart(): void;
   recent: Omit<JobRecord, 'logs'>[];
   onOpen(id: string): void;
-  onViewExample?(): void;
 }
 
-export function Landing({ health, healthError, options, onOptions, onStart, recent, onOpen, onViewExample }: Props) {
+export function Landing({ health, healthError, options, onOptions, onStart, recent, onOpen }: Props) {
   const provider = health?.providers.find((p) => p.id === options.provider);
   const ready = Boolean(provider?.available);
   const [apiInput, setApiInput] = useState(getApiBase());
@@ -40,11 +39,6 @@ export function Landing({ health, healthError, options, onOptions, onStart, rece
         {!ready && (
           <p className="landing__blocked">
             {problem || healthError || provider?.reason || 'Checking what this server can do…'}
-          </p>
-        )}
-        {!ready && DEMO_MODEL_URL && onViewExample && (
-          <p className="landing__blocked">
-            <button className="btn" onClick={onViewExample}>See an example result</button>
           </p>
         )}
       </header>

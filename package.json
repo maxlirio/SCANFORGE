@@ -2,7 +2,7 @@
   "name": "scanforge",
   "private": true,
   "version": "0.1.0",
-  "description": "Scan real-world objects into textured 3D models from a phone or laptop camera",
+  "description": "macOS app: drop a photo of an object, get a textured 3D model generated on your own GPU",
   "license": "MIT",
   "workspaces": [
     "packages/*",
@@ -12,15 +12,18 @@
     "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npm run dev --workspace @scanforge/server",
     "dev:web": "npm run dev --workspace @scanforge/web",
-    "build": "npm run build --workspace @scanforge/shared && npm run build --workspace @scanforge/server && npm run build --workspace @scanforge/web",
+    "build": "npm run build --workspace @scanforge/shared && npm run build --workspace @scanforge/server && npm run build --workspace @scanforge/web && npm run build --workspace @scanforge/desktop",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "start": "npm run start --workspace @scanforge/server",
     "setup:pipeline": "bash scripts/setup_pipeline.sh",
     "doctor": "npm run doctor --workspace @scanforge/server",
-    "build:pages": "npm run build --workspace @scanforge/shared && SCANFORGE_BASE=/SCANFORGE/ VITE_STATIC_BUILD=1 VITE_DEMO_MODEL=/SCANFORGE/example/ npm run build --workspace @scanforge/web"
+    "desktop": "npm run build && electron apps/desktop",
+    "desktop:app": "bash scripts/build_desktop_app.sh"
   },
   "devDependencies": {
+    "@electron/packager": "^18.4.4",
     "concurrently": "^9.1.0",
+    "electron": "^33.4.11",
     "typescript": "^5.7.2"
   },
   "engines": {

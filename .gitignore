@@ -12,3 +12,6 @@ __pycache__/
 
 .env
 .DS_Store
+
+# Packaged app and icon staging
+build/

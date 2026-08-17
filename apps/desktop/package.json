@@ -1,0 +1,17 @@
+{
+  "name": "@scanforge/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SCANFORGE desktop app: drop a photo, get a 3D model",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

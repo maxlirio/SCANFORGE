@@ -1,278 +1,160 @@
 # SCANFORGE
 
-Turn photographs of a real object into a textured 3D model, from your phone.
+A macOS app. Drop a photo of an object into it and get back a textured, game-ready
+3D model, generated on your own GPU.
 
-Open the site on a phone or iPad, press **Start scan**, walk around an object taking
-photos (or upload photos you already have), and it reconstructs a textured mesh you
-can rotate, inspect and download as GLB / OBJ / PLY. It installs to the home screen
-and runs full-screen like an app.
+No account, no API key, no per-model cost, and no photo leaves the machine.
+Microsoft's [TRELLIS.2](https://github.com/microsoft/TRELLIS) (MIT) runs locally on
+Apple Silicon via Metal.
 
-Reconstruction runs on a hosted server, not on your device and not on a laptop —
-it is minutes of multi-core CPU work that no phone browser can do. One container
-serves the website and does the reconstruction: see **Deploying** below.
+```
+photo.jpg  ──▶  SCANFORGE.app  ──▶  model.glb (≈100k triangles, 2048² texture)
+                     │
+                     └── TRELLIS.2 on this machine's GPU, ~10–15 min
+```
 
-The reconstruction is real photogrammetry — [COLMAP](https://colmap.github.io/)
-solving where each photograph was taken from, building a surface from the points it
-triangulates, and projecting your actual photographs onto it as a texture atlas.
-Nothing is faked, substituted or pre-baked. If your photos can't be reconstructed,
-the app says so instead of showing you a model.
+It **generates** geometry rather than measuring it: one photo tells it what the
+object looks like, and it infers the rest from learned priors. That is why it
+handles plain, untextured things — a white cube comes out as a clean white cube —
+and also why the sides your photo never showed are invention, and the scale is
+arbitrary. A photogrammetry engine is included for when you need real measurements
+instead (see *Engines* below).
 
-Read [DECISION.md](DECISION.md) for why this technology and this architecture.
+---
+
+## Install
+
+**1. The app**
+
+```bash
+npm install
+npm run desktop:app          # builds build/app/SCANFORGE-darwin-arm64/SCANFORGE.app
+cp -R build/app/SCANFORGE-darwin-arm64/SCANFORGE.app /Applications/
+```
+
+Open it once from Applications, then right-click its dock icon → *Options* →
+*Keep in Dock*.
+
+**2. The 3D engine** (once, ~16 GB of model weights)
+
+TRELLIS is not bundled — it is large and updates independently. Follow
+[docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md); it takes about fifteen minutes and
+ends with the app reporting a green *TRELLIS.2 on this machine's GPU*.
+
+Requirements: Apple Silicon, macOS 14+, ~20 GB free disk, Python 3.11. Verified on
+an M4 / 16 GB / macOS 26.3.
+
+---
+
+## Using it
+
+- **Drop a photo** on the window, or on the dock icon, or ⌘O, or
+  `open -a SCANFORGE photo.jpg`.
+- Pick **Detail** (fast ≈10 min / balanced ≈15 min / high, longer).
+- **Generate**. Live GPU progress shows while it works; you can leave it running.
+- Rotate, zoom, toggle wireframe and lighting in the viewer, then **download**
+  GLB / PLY / the texture.
+
+Scripted use: `SCANFORGE.app/Contents/MacOS/SCANFORGE photo.jpg --generate`.
+
+Finished models live in `~/Library/Application Support/SCANFORGE/scans`
+(*SCANFORGE → Open Scans Folder*).
+
+### What makes a good photo
+
+One object, filling most of the frame, in even light, against a background it
+stands out from. Several objects at once will come back as one confused object.
+
+---
+
+## Engines
+
+Reconstruction sits behind one narrow interface
+(`apps/server/src/providers/types.ts`), so it can be swapped without touching the
+UI, the job queue or the viewer.
+
+| Engine | What it does | Needs |
+|---|---|---|
+| **`trellis-local`** (default) | TRELLIS.2 on this machine's GPU. One photo → clean game-ready mesh. Generative. | Apple Silicon + the weights |
+| `colmap-local` | Real photogrammetry: measures your actual object from 8+ overlapping photos. Coarse without CUDA, and blind to untextured surfaces. | `brew install colmap` |
+| `replicate` | Hosted GPU, for machines with no usable GPU. Costs per model. **Untested** — needs an account. | `REPLICATE_API_TOKEN` |
+
+The app picks whichever is actually available, preferring the GPU one. Check with:
+
+```bash
+npm run doctor
+```
 
 ---
 
 ## Architecture
 
 ```
-apps/web        React + TypeScript + three.js
-                camera capture, quality checks, coverage tracking, 3D viewer
-                        │  REST + Server-Sent Events
-apps/server     Fastify + TypeScript
-                jobs, queue, storage seam, provider seam
-                        │  child process, newline-delimited JSON events
-pipeline/       Python + COLMAP
-                prepare → SfM → filter/crop → mesh → texture → GLB/OBJ/PLY
-packages/shared TypeScript types shared by all three
+apps/desktop    Electron shell: window, dock, drag-and-drop, starts the engine
+apps/server     Fastify API on 127.0.0.1 — jobs, queue, storage, progress stream
+apps/web        React + three.js — drop zone, progress, 3D viewer
+pipeline/       Python: TRELLIS runner, texture baker, COLMAP photogrammetry
+packages/shared TypeScript contracts shared by all of them
 ```
 
-Four seams, kept deliberately narrow:
+The window loads the local server rather than `file://`, so uploads, the progress
+stream and the viewer are all same-origin. The server binds `127.0.0.1` on a port
+chosen at launch and is never exposed to the network.
 
-| Seam | File | Swap it for |
-|---|---|---|
-| Reconstruction provider | `apps/server/src/providers/types.ts` | a CUDA box, a hosted GPU, next year's model |
-| Storage | `apps/server/src/storage.ts` | S3/GCS instead of local disk |
-| Progress events | `packages/shared/src/index.ts` | any provider that can report stages |
-| Pipeline CLI | `pipeline/scanforge/run.py` | a different photogrammetry stack |
-
-Three providers ship:
-
-- **`trellis-local`** (default where available) — Microsoft's TRELLIS.2 (MIT) running on
-  this machine's own GPU via Metal. **One photo** in, a clean ~70k-triangle textured
-  game-ready mesh out, in ~10 minutes on an M4. Free, unlimited, nothing leaves the
-  machine. It *generates* geometry, so it handles plain untextured objects that
-  photogrammetry physically cannot see — and invents the sides your photo never showed.
-  Setup and the bugs worked around: [docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md).
-
-
-- **`colmap-local`** — real photogrammetry, runs on this machine, no API
-  key, nothing leaves your network. **Tested end to end.**
-- **`replicate`** (optional) — hosted GPU running TRELLIS (MIT model) for people
-  with no GPU. It *generates* geometry rather than measuring it, and the UI labels
-  any such result. **Implemented against Replicate's documented API but never
-  executed here** — that needs a funded account. Treat it as unverified.
+Progress is never invented: a stage shows a percentage only when the underlying
+tool reports a real counter, and an indeterminate indicator otherwise.
 
 ---
 
-## Deploying (so a phone can actually use it)
-
-One image serves the site and reconstructs. It needs ~2 GB RAM and no GPU.
-
-```bash
-docker build -t scanforge .
-docker run -p 7860:7860 -v scanforge-data:/data scanforge
-```
-
-### Where to run it
-
-Reconstruction wants ~1–2 GB of RAM and real cores for a few minutes, which rules
-out most "free" tiers (512 MB at 0.1 vCPU is not a smaller version of this — it
-fails). Checked by deploying, 2026-08-14:
-
-| Host | Cost | Notes |
-|---|---|---|
-| **A small VPS** (Hetzner/DigitalOcean) | ~$5/mo | 2 vCPU / 4 GB, always on, persistent disk. Best for a permanent site. |
-| **GitHub Codespaces** | free, 120 core-h/mo | Best free compute and no new account, but it is a session: 30-min idle timeout, new URL each time. `.devcontainer/` is set up for it. |
-| Fly.io | ~$2–5/mo | free tier retired in 2024 |
-| Hugging Face Spaces | $9/mo (PRO) | Docker Spaces are **no longer free** — the create call returns `402 Payment Required`. `scripts/deploy_space.sh` works if you have PRO. |
-| Render / Koyeb free | free | 512 MB RAM — too small |
-
-On any of them: `PORT` is respected, and mounting a volume at `/data` keeps scans
-across restarts. GitHub Pages can serve the frontend and be pointed at whichever
-backend you run.
-
----
-
-## Running it locally
-
-### 1. Requirements
-
-| | |
-|---|---|
-| Node | 20+ (developed on 24) |
-| Python | 3.10+ (3.11 used here) |
-| COLMAP | 4.1+ — `brew install colmap` / `apt install colmap` |
-| GPU | **not required**; CUDA is used automatically if present |
-| API keys | **none** for the default provider |
-| Model downloads | **none** for the default provider |
-
-Disk: each scan keeps its uploads plus ~10–50 MB of outputs under `data/`.
-
-### 2. Install
+## Development
 
 ```bash
 npm install
-npm run setup:pipeline     # creates pipeline/.venv and checks COLMAP
-npm run doctor             # prints exactly what this machine can do
+npm run build
+npm run desktop      # runs the app from source
+npm run doctor       # what this machine can actually do
 ```
 
-`npm run doctor` is the source of truth. On this Mac it reports:
-
-```
-✅ colmap-local — COLMAP photogrammetry (local)
-   colmapVersion: "4.1.1"   cuda: false   tier: "sparse"
-```
-
-### 3. Run
+Useful checks:
 
 ```bash
-npm run dev          # web on https://localhost:5173, API on http://localhost:5174
+scripts/e2e_test.sh <image-dir> balanced object   # drive the API directly
+scripts/inspect_glb.py model.glb --render out.png # validate + render a GLB headlessly
 ```
 
-or as a single process:
+`docs/` covers the TRELLIS install and its traps, and the optional AGPL dense
+photogrammetry tier. `DECISION.md` records why this technology and this
+architecture, including what was rejected.
 
-```bash
-npm run build && npm start          # everything on http://localhost:5174
-```
-
-### 4. Scanning from your phone
-
-`getUserMedia` only works over HTTPS or on `localhost`, so the dev server serves
-HTTPS with a self-signed certificate. On your phone, open
-`https://<your-laptop-ip>:5173` and accept the certificate warning once.
-
-```bash
-ipconfig getifaddr en0      # your LAN address
-```
-
-Set `SCANFORGE_HTTPS=0` if you only ever use `localhost`.
-
----
-
-## How to capture
-
-The reconstruction is only as good as the photographs.
-
-- **25–60 photos**, moving roughly 15° between shots, all the way around.
-- **Keep the object in frame** and let it fill a good part of it.
-- **Move yourself, not the object.** Photogrammetry solves one rigid world; if the
-  object turns relative to its surroundings, the solve fails.
-- **Even, diffuse light.** Overcast outdoors or a bright room. Avoid hard shadows
-  that move with you.
-- **Do a second pass** from higher up and lower down for the top and underside.
-- **Texture is what gets tracked.** Bark, fabric, print and stone reconstruct well;
-  plain white, glossy, chrome and glass do not — that is physics, not a bug.
-- A cluttered, textured background *helps* the solve. Object mode crops it away
-  afterwards.
-
-The capture screen measures sharpness, brightness and motion from the live frames
-and warns you in real time. On phones it also tracks which compass sectors you have
-photographed. On a laptop with no orientation sensors it says so and counts photos
-instead of drawing a coverage dial that would mean nothing.
-
----
-
-## Testing it without a camera
-
-```bash
-scripts/fetch_testsets.sh monstree          # 41 real iPhone photos of a tree trunk
-npm start &
-scripts/e2e_test.sh data/testsets/monstree/images balanced object
-```
-
-`e2e_test.sh` drives the real HTTP API: create job → upload → start → poll → download
-the GLB → validate it with `scripts/inspect_glb.py` (which checks the container,
-every accessor's byte range, the index buffer, UVs, and can render the result
-headlessly for a visual check).
-
----
-
-## What the outputs are
-
-| File | What it is |
-|---|---|
-| `model.glb` | Geometry + UVs + texture in one file. Load this anywhere. |
-| `model.obj` + `model.mtl` + `texture.jpg` | Same model as OBJ. All three files must stay together. |
-| `model.ply` | Mesh geometry only, no texture. |
-| `points.ply` | The sparse point cloud the mesh was built from. |
-| `points_dense.ply` | Dense cloud — only on the CUDA or OpenMVS tiers. |
-| `thumbnail.jpg` | Preview, rendered from the exported geometry by the pipeline. |
-| `result.json` | Everything measurable about the run. |
-
-Models are exported **+Y up**, centred on the object, and normalised so the longest
-side is 1.0. Photogrammetry has no absolute scale — a 1.0 model is not one metre.
-
----
-
-## Configuration
-
-Copy `.env.example` to `.env`. Notable values:
-
-| Variable | Default | Why you'd change it |
-|---|---|---|
-| `SCANFORGE_PROVIDER` | `colmap-local` | point at the hosted GPU provider |
-| `SCANFORGE_CONCURRENCY` | `1` | more cores than one scan can use |
-| `SCANFORGE_DATA_DIR` | `./data` | put scans on a bigger disk |
-| `COLMAP_BIN` | auto | COLMAP not on `PATH` |
-| `OPENMVS_BIN_DIR` | auto | enable the dense tier — see [docs/OPENMVS.md](docs/OPENMVS.md) |
-| `REPLICATE_API_TOKEN` | unset | enable the hosted GPU provider |
+The container image (`Dockerfile`) and the CPU photogrammetry pipeline are still
+here and still work — they were the earlier server-hosted incarnation of this
+project, and they remain the answer for measuring real objects on a machine
+without an Apple GPU.
 
 ---
 
 ## Limitations
 
-Stated plainly, because they are real:
-
-- **No CUDA here means no dense stereo.** Geometry comes from the sparse point
-  cloud, so it is coarse and faceted; detail lives in the texture rather than the
-  mesh. The upgrade paths are documented, not hidden.
-- **Shiny, transparent and untextured objects fail.** Inherent to photogrammetry.
-- **Minutes, not seconds.** ~40 s for 50 photos at `fast`, ~2 min at `balanced`,
-  considerably longer at `high` on CPU.
-- **The up axis is inferred** from the camera path. Orbit captures get it right;
-  erratic ones may come out tilted, and the pipeline warns when it is unsure.
-- **Object isolation is a heuristic** (track-length-weighted core of the point
-  cloud). It can crop too much or too little; `scene` mode disables it.
-- **The Replicate provider is untested** (no account). See above.
-
----
+- **~10–15 minutes per model** on an M4. A CUDA GPU does this in seconds; that is
+  the price of not renting one.
+- **Generated, not measured.** Unseen sides are invented and the scale is
+  arbitrary. Use the photogrammetry engine if that matters.
+- **One object per photo.**
+- The app is **unsigned**, so the first launch needs right-click → *Open*.
+- TRELLIS's own texture baker is broken on Apple Silicon without full Xcode;
+  SCANFORGE ships a corrected one (`pipeline/scanforge/trellis_bake.py`), and
+  [docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md) explains why.
 
 ## Licences
 
 | Component | Licence |
 |---|---|
 | SCANFORGE | MIT |
-| COLMAP 4.1 | BSD-3-Clause |
-| three.js, React, Vite, Fastify | MIT |
-| numpy, Pillow | BSD-3 / MIT-CMU |
-| OpenMVS (optional, not bundled) | **AGPL-3.0** — read [docs/OPENMVS.md](docs/OPENMVS.md) |
-| TRELLIS (optional, via Replicate) | MIT |
+| TRELLIS.2 (Microsoft) | MIT |
+| DINOv3 weights (Meta) | Meta DINOv3 licence, gated |
+| RMBG-2.0 (BRIA) | non-commercial without a licence |
+| COLMAP | BSD-3-Clause |
+| Electron, React, three.js, Fastify | MIT |
 
-No non-commercially-licensed model weights are used anywhere in the default path.
-Test photo sets are downloaded by script, never vendored; `monstree` and `buddha`
-belong to AliceVision (buddha is CC-BY-4.0), `fox` to NVlabs/instant-ngp.
-
----
-
-## The published page (GitHub Pages)
-
-`.github/workflows/pages.yml` publishes the **frontend** to GitHub Pages on every
-push to `main`.
-
-**What works there:** the landing page, the camera capture screen (Pages is HTTPS,
-so `getUserMedia` is allowed), the 3D viewer, and one bundled **real** example
-model reconstructed by this pipeline.
-
-**What cannot work there:** the reconstruction itself. Pages serves static files;
-it cannot run Node, Python or COLMAP. To scan from the published page you must run
-a SCANFORGE server yourself and point the page at it:
-
-1. `npm start` on your machine.
-2. Expose it over **HTTPS** — an https page is not allowed to call an http backend.
-   A tunnel is the easy way: `cloudflared tunnel --url http://localhost:5174`.
-3. Paste that address into **Reconstruction server** on the published page, or
-   open `…/#/?api=https://your-tunnel-url`. It is remembered in `localStorage`.
-
-The page states all of this itself rather than looking broken.
-
-To publish under a different repository name, change `SCANFORGE_BASE` in the
-`build:pages` script — GitHub Pages serves project sites from `/<repo>/`.
+DINOv3 and RMBG-2.0 are downloaded by the TRELLIS installer, not redistributed
+here. RMBG-2.0's terms are the one thing to check before commercial use.

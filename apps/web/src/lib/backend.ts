@@ -44,9 +44,6 @@ export function setApiBase(url: string): void {
 /** True for builds published as a static site with no API on the origin. */
 export const IS_STATIC_BUILD = import.meta.env.VITE_STATIC_BUILD === '1';
 
-/** A real model produced by this pipeline, bundled so the viewer is usable offline. */
-export const DEMO_MODEL_URL = import.meta.env.VITE_DEMO_MODEL ?? '';
-
 /**
  * A static build with no configured backend cannot reconstruct anything, and the
  * browser would block a plain-http backend from an https page anyway.
