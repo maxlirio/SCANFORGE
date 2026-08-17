@@ -11,6 +11,7 @@ import { JobManager } from './jobs.js';
 import { ColmapLocalProvider } from './providers/colmapLocal.js';
 import { ReplicateProvider } from './providers/replicate.js';
 import { TrellisLocalProvider } from './providers/trellisLocal.js';
+import { KaggleGpuProvider } from './providers/kaggleGpu.js';
 import { EngineInstaller } from './engine/install.js';
 import type { ReconstructionProvider } from './providers/types.js';
 
@@ -38,7 +39,8 @@ async function main() {
 
   const storage = new LocalStorage(config.dataDir);
   const providerList: ReconstructionProvider[] = [
-    new TrellisLocalProvider(), new ColmapLocalProvider(), new ReplicateProvider(),
+    new TrellisLocalProvider(), new KaggleGpuProvider(),
+    new ColmapLocalProvider(), new ReplicateProvider(),
   ];
   const providers = new Map(providerList.map((p) => [p.id, p]));
   const jobs = new JobManager(storage, providers);

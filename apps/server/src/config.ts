@@ -45,6 +45,12 @@ export const config = {
   jobRetentionDays: envInt('SCANFORGE_RETENTION_DAYS', 30),
   /** Hard cap on stored scans; the oldest are deleted first. */
   maxJobs: envInt('SCANFORGE_MAX_JOBS', 60),
+  kaggle: {
+    /** Prebuilt CUDA extension wheels; without them every run compiles for ~25 min. */
+    wheelsDataset: env('SCANFORGE_KAGGLE_WHEELS', ''),
+    pollMs: envInt('SCANFORGE_KAGGLE_POLL_MS', 15_000),
+    timeoutMinutes: envInt('SCANFORGE_KAGGLE_TIMEOUT_MIN', 45),
+  },
   replicate: {
     token: env('REPLICATE_API_TOKEN', ''),
     model: env('REPLICATE_MODEL', 'firtoz/trellis'),

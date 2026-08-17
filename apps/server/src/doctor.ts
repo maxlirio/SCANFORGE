@@ -3,8 +3,10 @@ import { config } from './config.js';
 import { ColmapLocalProvider } from './providers/colmapLocal.js';
 import { ReplicateProvider } from './providers/replicate.js';
 import { TrellisLocalProvider } from './providers/trellisLocal.js';
+import { KaggleGpuProvider } from './providers/kaggleGpu.js';
 
-const providers = [new TrellisLocalProvider(), new ColmapLocalProvider(), new ReplicateProvider()];
+const providers = [new TrellisLocalProvider(), new KaggleGpuProvider(),
+                   new ColmapLocalProvider(), new ReplicateProvider()];
 
 console.log('SCANFORGE environment check');
 console.log('  data dir :', config.dataDir);
