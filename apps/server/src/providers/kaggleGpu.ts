@@ -7,7 +7,14 @@
  * minutes there, and it leaves this Mac free.
  *
  * Measured facts that shaped this (from scanforge-gpu-probe, run on Kaggle):
- *  - P100, capability 6.0: flash-attn is unavailable, so the sdpa path is used.
+ *  - The free tier's default GPU is a P100 (capability 6.0) and the API cannot ask
+ *    for anything else: there is no accelerator field, only enable_gpu, and the
+ *    accelerator is a per-notebook UI setting that an API push resets. So the run
+ *    must work on a P100.
+ *  - Kaggle's own torch (2.10+cu128) supports sm_70 upward, so it cannot run on a
+ *    P100 at all - even a plain conv2d fails. torch 2.6.0+cu124, which TRELLIS
+ *    pins anyway, ships sm_50..sm_90 and works. The wheels are built against it.
+ *  - flash-attn needs capability 7.5+, so the sdpa attention path is used.
  *  - The 16 GB of model weights download in 68 seconds. They are NOT cached in a
  *    dataset; it is not worth the complexity.
  *  - TRELLIS.2 builds five CUDA extensions from source, 15-30 minutes. Those ARE
@@ -138,8 +145,13 @@ export class KaggleGpuProvider implements ReconstructionProvider {
       method: 'POST',
       headers: { Authorization: auth(creds), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: `${creds.username}/${slug}`,
-        title: slug,
+        // The API wants `slug`; `id` is a numeric kernel id and sending the
+        // "user/name" string there fails with a confusing integer-conversion error.
+        slug: `${creds.username}/${slug}`,
+        newTitle: slug,
+        // Accepted but ignored by the API as of 2026-08: the accelerator is a
+        // per-notebook setting made in the web UI. Sent anyway in case that changes.
+        accelerator: 'nvidiaTeslaT4x2',
         text: script,
         language: 'python',
         kernelType: 'script',
@@ -321,8 +333,25 @@ def sh(c, t=3600):
     if p.returncode: print((p.stderr or "")[-1500:], flush=True)
     return p.returncode
 
-# Prebuilt CUDA extensions, so nothing is compiled here.
-sh("pip install --no-deps /kaggle/input/*/*.whl")
+# Kaggle's default torch cannot run on the P100 this will land on; 2.6.0+cu124 can,
+# and the prebuilt wheels are built against it, so the versions must match.
+sh("pip install -q torch==2.6.0 torchvision==0.21.0 "
+   "--index-url https://download.pytorch.org/whl/cu124", 2400)
+
+# Prebuilt CUDA extensions, so nothing is compiled here. Found with a recursive
+# glob rather than a shell one: the dataset may mount nested, and an unmatched
+# shell glob passes the literal "*.whl" to pip, which fails obscurely.
+import glob as _g
+wheels = _g.glob("/kaggle/input/**/*.whl", recursive=True)
+print("attached inputs:", os.listdir("/kaggle/input") if os.path.isdir("/kaggle/input") else "none",
+      flush=True)
+print("wheels found:", [w.split("/")[-1] for w in wheels], flush=True)
+if wheels:
+    sh("pip install --no-deps " + " ".join(wheels))
+else:
+    raise SystemExit(
+        "No prebuilt CUDA wheels are attached to this notebook. Attach the "
+        "scanforge-wheels dataset (Add Input) or run scripts/kaggle/build_wheels.sh.")
 # Installed one at a time: a single unresolvable pin (utils3d) otherwise aborts the
 # whole line and takes trimesh with it, which then fails much later and obscurely.
 # plyfile is imported by the shape decoder; einops/timm by the background

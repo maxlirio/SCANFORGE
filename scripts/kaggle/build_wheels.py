@@ -29,9 +29,19 @@ def sh(cmd, timeout=3600, quiet=False):
             print("  " + ((p.stderr or "")[-1800:]).replace("\n", "\n  "), flush=True)
     return p.returncode, dt
 
+# Kaggle's own torch (2.10+cu128) supports sm_70+, which excludes the free tier's
+# default P100 (sm_60). torch 2.6.0+cu124 - the version TRELLIS pins anyway - ships
+# sm_50 through sm_90, so install that first and build the extensions against it.
+# Verified on Kaggle: 2.10 arch list is sm_70..sm_120; 2.6 includes sm_60 and a
+# conv2d runs on the P100.
+sh("pip install -q torch==2.6.0 torchvision==0.21.0 "
+   "--index-url https://download.pytorch.org/whl/cu124", timeout=2400)
+
 import torch
 print("torch", torch.__version__, "cuda", torch.version.cuda,
-      "| gpu", torch.cuda.get_device_name(0), flush=True)
+      "| gpu", torch.cuda.get_device_name(0),
+      "| archs", torch.cuda.get_arch_list(), flush=True)
+assert torch.__version__.startswith("2.6"), "torch 2.6 did not install; wheels would not match"
 
 print(f"\n=== [{time.time()-T0:.0f}s] clone ===", flush=True)
 sh("git clone --depth 1 --recurse-submodules https://github.com/microsoft/TRELLIS.2.git /kaggle/T2")
