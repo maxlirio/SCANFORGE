@@ -125,7 +125,7 @@ function createWindow(url: string): BrowserWindow {
     // Files dropped on the dock icon before the window existed.
     if (pendingFiles.length) {
       win.webContents.send('scanforge:open-files', pendingFiles.splice(0),
-        { generate: autoGenerate() });
+        { generate: takeAutoGenerate() });
     }
   });
   void win.loadURL(url);
@@ -196,8 +196,17 @@ app.on('open-file', (event, filePath) => {
   else pendingFiles.push(filePath);
 });
 
-/** `SCANFORGE photo.jpg --generate` starts immediately, for scripting and tests. */
-const autoGenerate = (): boolean => process.argv.includes('--generate');
+/**
+ * `SCANFORGE photo.jpg --generate` starts immediately, for scripting and tests.
+ * Consumed once per launch: `ready-to-show` can fire again (a reload, a recreated
+ * window), and re-arming it would silently spend another GPU run.
+ */
+let autoGenerateArmed = process.argv.includes('--generate');
+const takeAutoGenerate = (): boolean => {
+  const armed = autoGenerateArmed;
+  autoGenerateArmed = false;
+  return armed;
+};
 
 function argvPhotos(): string[] {
   return process.argv

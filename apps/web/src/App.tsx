@@ -28,6 +28,7 @@ export default function App() {
   const [fatal, setFatal] = useState('');
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const selectedProvider = health?.providers.find((p) => p.id === options.provider);
+  const submittingRef = useRef(false);
 
   // Health decides which providers the landing page can offer.
   useEffect(() => {
@@ -87,6 +88,10 @@ export default function App() {
   useEffect(() => () => unsubscribeRef.current?.(), []);
 
   const handleFinishCapture = useCallback(async (photos: CapturedPhoto[]) => {
+    // One job at a time, no matter what asks: a stray duplicate here costs the
+    // user another ten minutes of GPU time.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setFatal('');
     setScreen('processing');
     setUploadProgress({ sent: 0, total: photos.length });
@@ -104,6 +109,7 @@ export default function App() {
     } catch (err) {
       setUploadProgress(null);
       setFatal((err as Error).message);
+      submittingRef.current = false;
     }
   }, [options, watchJob]);
 
@@ -115,6 +121,7 @@ export default function App() {
   }, [handleFinishCapture]);
 
   const startNewScan = () => {
+    submittingRef.current = false;
     unsubscribeRef.current?.();
     setJob(null);
     setFatal('');
