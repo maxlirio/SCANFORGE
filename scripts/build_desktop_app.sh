@@ -62,8 +62,13 @@ mkdir -p "$STAGE/node_modules/@scanforge"
 cp -R "$STAGE/packages/shared" "$STAGE/node_modules/@scanforge/shared"
 
 echo "==> packaging"
+# --prune=false is load-bearing: packager's `npm prune --production` deletes the
+# vendored @scanforge/shared (it is not a registry dependency), and the app then
+# dies with ERR_MODULE_NOT_FOUND anywhere it cannot reach the repo's node_modules.
+# The staging directory already holds production dependencies only.
 npx --yes @electron/packager "$STAGE" SCANFORGE \
   --platform=darwin --arch=arm64 \
+  --prune=false \
   --out "$OUT" \
   --icon "$ROOT/build/scanforge.icns" \
   --app-bundle-id dev.scanforge.app \
@@ -72,6 +77,31 @@ npx --yes @electron/packager "$STAGE" SCANFORGE \
 
 APP="$OUT/SCANFORGE-darwin-arm64/SCANFORGE.app"
 [ -d "$APP" ] || { echo "packaging produced no app"; exit 1; }
+
+# Prove the bundle is self-contained. Running it from inside this repo can silently
+# resolve missing packages from ../node_modules by walking up the tree, so start its
+# engine the way Finder would: empty environment, nothing to borrow.
+echo "==> checking the bundle stands alone"
+CHECK_LOG="$OUT/selfcheck.log"
+env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+    ELECTRON_RUN_AS_NODE=1 PORT=5399 HOST=127.0.0.1 \
+    SCANFORGE_DATA_DIR="$(mktemp -d)" \
+    "$APP/Contents/MacOS/SCANFORGE" \
+    "$APP/Contents/Resources/app/apps/server/dist/index.js" >"$CHECK_LOG" 2>&1 &
+CHECK_PID=$!
+for _ in $(seq 1 40); do
+  sleep 0.5
+  curl -sf --max-time 2 http://127.0.0.1:5399/api/health >/dev/null 2>&1 && break
+done
+if curl -sf --max-time 5 http://127.0.0.1:5399/api/health >/dev/null 2>&1; then
+  echo "    ok - the engine starts with an empty environment"
+  kill "$CHECK_PID" 2>/dev/null || true
+else
+  kill "$CHECK_PID" 2>/dev/null || true
+  echo "FAILED - the bundle cannot start on its own:"
+  tail -12 "$CHECK_LOG"
+  exit 1
+fi
 echo ""
 echo "Built: $APP"
 du -sh "$APP" | awk '{print "Size : " $1}'

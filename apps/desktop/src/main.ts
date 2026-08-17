@@ -81,12 +81,18 @@ async function startServer(): Promise<string> {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  serverProcess.stdout?.on('data', (d) => process.stdout.write(`[engine] ${d}`));
-  serverProcess.stderr?.on('data', (d) => process.stderr.write(`[engine] ${d}`));
+  let engineTail = '';
+  const keep = (chunk: Buffer) => {
+    engineTail = (engineTail + chunk.toString()).slice(-3000);
+  };
+  serverProcess.stdout?.on('data', (d) => { keep(d); process.stdout.write(`[engine] ${d}`); });
+  serverProcess.stderr?.on('data', (d) => { keep(d); process.stderr.write(`[engine] ${d}`); });
   serverProcess.on('exit', (code) => {
     if (code !== 0 && !app.isQuittingForReal) {
+      // Show what it actually said: an exit code alone sends people hunting in Console.
+      const reason = engineTail.trim().split('\n').filter(Boolean).slice(-6).join('\n');
       dialog.showErrorBox('SCANFORGE engine stopped',
-        `The local engine exited with code ${code}. Check Console for [engine] lines.`);
+        `The local engine exited with code ${code}.\n\n${reason || 'It produced no output.'}`);
     }
   });
 
