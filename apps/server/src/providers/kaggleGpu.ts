@@ -23,6 +23,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import jpeg from 'jpeg-js';
 import type { ProviderStatus } from '@scanforge/shared';
 import { config } from '../config.js';
 import type { ReconstructionProvider, RunContext } from './types.js';
@@ -50,9 +51,10 @@ export class KaggleGpuProvider implements ReconstructionProvider {
   readonly id = 'kaggle-gpu';
   readonly label = 'Free GPU on Kaggle';
   readonly description =
-    'Runs the generation on a free Tesla P100 in your Kaggle account instead of this ' +
-    'Mac. Faster, and leaves your machine alone — but your photo is uploaded to ' +
-    'Kaggle, and it uses your weekly GPU quota.';
+    'Runs the generation on a free Kaggle GPU instead of this Mac, leaving your ' +
+    'machine alone. Set that notebook\'s accelerator to T4 x2 once in Kaggle: the ' +
+    'default P100 is too old for current PyTorch. Your photo is uploaded to Kaggle ' +
+    'and it uses your weekly GPU quota.';
   readonly minPhotos = 1;
 
   async probe(): Promise<ProviderStatus> {
@@ -96,14 +98,23 @@ export class KaggleGpuProvider implements ReconstructionProvider {
     return {
       ...base,
       available: true,
-      details: { account: creds.username, gpu: 'Tesla P100 (free tier)', wheels },
+      details: {
+        account: creds.username,
+        wheels,
+        notebook: `https://www.kaggle.com/code/${creds.username}/${config.kaggle.kernelSlug}`,
+        note: 'set the notebook accelerator to T4 x2 (P100 is unsupported by current PyTorch)',
+      },
     };
   }
 
   async run(ctx: RunContext): Promise<void> {
     const creds = await credentials();
     if (!creds) throw new Error('No Kaggle credentials in ~/.kaggle/kaggle.json');
-    const slug = `scanforge-run-${ctx.jobId.slice(0, 8)}`;
+    // One notebook, re-pushed per job, rather than one per job. The Kaggle API
+    // cannot choose the accelerator - that is a per-notebook setting made in the
+    // web UI - so a fresh notebook each time would always land on the default
+    // P100, whose architecture current PyTorch no longer ships kernels for.
+    const slug = config.kaggle.kernelSlug;
     const wheels = config.kaggle.wheelsDataset || `${creds.username}/scanforge-wheels`;
 
     ctx.emit({
@@ -226,7 +237,14 @@ export class KaggleGpuProvider implements ReconstructionProvider {
     });
   }
 
-  /** The sharpest photo, downscaled: TRELLIS works at 1024 anyway. */
+  /**
+   * The photo travels inside the kernel source, and Kaggle rejects a script much
+   * over ~1 MB — a full-resolution photo base64s well past that. Downscale to
+   * 1024 px, which is what TRELLIS resizes to anyway, so nothing is lost.
+   *
+   * Done with a pure-JS codec on purpose: this provider's whole point is working
+   * on a machine with no local engine, so it cannot assume Python or Pillow.
+   */
   private async bestPhotoBase64(dir: string): Promise<string> {
     const names = (await fs.readdir(dir)).filter((n) => !n.startsWith('.')).sort();
     if (!names.length) throw new Error('No photo to send.');
@@ -236,8 +254,52 @@ export class KaggleGpuProvider implements ReconstructionProvider {
       const { size } = await fs.stat(path.join(dir, name));
       if (size > bestSize) { bestSize = size; best = name; }
     }
-    const data = await fs.readFile(path.join(dir, best));
-    return data.toString('base64');
+    const raw = await fs.readFile(path.join(dir, best));
+
+    if (!/\.jpe?g$/i.test(best)) {
+      // Not a JPEG: send as-is if it fits, otherwise say so plainly.
+      if (raw.length > 700_000) {
+        throw new Error(`${best} is too large to send to Kaggle and is not a JPEG, `
+          + 'so it cannot be resized here. Re-save it as a JPEG and try again.');
+      }
+      return raw.toString('base64');
+    }
+
+    try {
+      const decoded = jpeg.decode(raw, { useTArray: true });
+      const scale = Math.min(1, 1024 / Math.max(decoded.width, decoded.height));
+      if (scale >= 1 && raw.length < 600_000) return raw.toString('base64');
+
+      const width = Math.max(1, Math.round(decoded.width * scale));
+      const height = Math.max(1, Math.round(decoded.height * scale));
+      const out = Buffer.alloc(width * height * 4);
+      // Box filter: average the source pixels each destination pixel covers, which
+      // keeps detail far better than dropping samples.
+      const xStep = decoded.width / width;
+      const yStep = decoded.height / height;
+      for (let y = 0; y < height; y += 1) {
+        const y0 = Math.floor(y * yStep);
+        const y1 = Math.max(y0 + 1, Math.floor((y + 1) * yStep));
+        for (let x = 0; x < width; x += 1) {
+          const x0 = Math.floor(x * xStep);
+          const x1 = Math.max(x0 + 1, Math.floor((x + 1) * xStep));
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let sy = y0; sy < y1; sy += 1) {
+            for (let sx = x0; sx < x1; sx += 1) {
+              const i = (sy * decoded.width + sx) * 4;
+              r += decoded.data[i]; g += decoded.data[i + 1]; b += decoded.data[i + 2];
+              n += 1;
+            }
+          }
+          const o = (y * width + x) * 4;
+          out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = 255;
+        }
+      }
+      const encoded = jpeg.encode({ data: out, width, height }, 86);
+      return Buffer.from(encoded.data).toString('base64');
+    } catch (err) {
+      throw new Error(`Could not prepare ${best} for upload: ${(err as Error).message}`);
+    }
   }
 }
 
@@ -260,9 +322,55 @@ def sh(c, t=3600):
     return p.returncode
 
 # Prebuilt CUDA extensions, so nothing is compiled here.
-sh("pip install --no-deps /kaggle/input/*/wheels/*.whl")
-sh("pip install -q easydict utils3d imageio imageio-ffmpeg ninja trimesh xatlas fast-simplification")
+sh("pip install --no-deps /kaggle/input/*/*.whl")
+# Installed one at a time: a single unresolvable pin (utils3d) otherwise aborts the
+# whole line and takes trimesh with it, which then fails much later and obscurely.
+# plyfile is imported by the shape decoder; einops/timm by the background
+# remover's remote code. Missing either surfaces as an unrelated 401 later.
+for pkg in ["easydict", "imageio", "imageio-ffmpeg", "ninja", "trimesh",
+            "xatlas", "fast-simplification", "opencv-python-headless",
+            "plyfile", "einops", "timm", "kornia"]:
+    sh(f"pip install -q {pkg}")
+# The exact utils3d commit TRELLIS pins; the PyPI releases conflict with Kaggle's stack.
+sh("pip install -q --no-deps git+https://github.com/EasternJournalist/utils3d.git"
+   "@9a4eb15e4021b67b12c460c7057d642626897ec8")
 sh("git clone --depth 1 --recurse-submodules https://github.com/microsoft/TRELLIS.2.git /kaggle/T2")
+
+# TRELLIS's loader tries "<path>/<value>" first and silently falls back to treating
+# the value as a Hub reference. That fallback is load-bearing - one checkpoint lives
+# in a different repository (microsoft/TRELLIS-image-large) - but it also hides the
+# real reason a local checkpoint failed behind a confusing 401. Keep the fallback,
+# report the primary error.
+base_py = "/kaggle/T2/trellis2/pipelines/base.py"
+src_txt = open(base_py).read()
+src_txt = src_txt.replace(
+    "            except Exception as e:\n                _models[k] = models.from_pretrained(v)",
+    "            except Exception as e:\n                print('local load failed for', k, '->', repr(e)[:300], flush=True)\n                _models[k] = models.from_pretrained(v)")
+open(base_py, "w").write(src_txt)
+
+# Same half-precision fix the desktop installer applies: the pipeline runs in fp16
+# but the matting model builds a float32 tensor, so it dies with
+# "Input type (float) and bias type (c10::Half) should be the same".
+rembg_py = "/kaggle/T2/trellis2/pipelines/rembg/BiRefNet.py"
+rt = open(rembg_py).read()
+before = rt
+# Upstream has used both .to("cuda") and .to(self.device); handle either.
+for old_call, new_call in [
+    ('.unsqueeze(0).to("cuda")', '.unsqueeze(0).to("cuda", _dt)'),
+    ('.unsqueeze(0).to(self.device)', '.unsqueeze(0).to(self.device, _dt)'),
+]:
+    line = "        input_images = self.transform_image(image)" + old_call
+    if line in rt:
+        rt = rt.replace(line,
+                        "        _dt = next(self.model.parameters()).dtype\n"
+                        "        input_images = self.transform_image(image)" + new_call)
+rt = rt.replace("preds = self.model(input_images)[-1].sigmoid().cpu()",
+                "preds = self.model(input_images)[-1].sigmoid().float().cpu()")
+if rt == before:
+    raise SystemExit("dtype patch did not apply - upstream BiRefNet.py changed shape")
+open(rembg_py, "w").write(rt)
+print("applied the half-precision fix to the background remover", flush=True)
+
 sys.path.insert(0, "/kaggle/T2")
 
 import torch
@@ -270,7 +378,30 @@ from PIL import Image
 from trellis2.pipelines.trellis2_image_to_3d import Trellis2ImageTo3DPipeline
 print("gpu", torch.cuda.get_device_name(0), "| loaded at", round(time.time()-T0), "s", flush=True)
 
-pipe = Trellis2ImageTo3DPipeline.from_pretrained("microsoft/TRELLIS.2-4B")
+# Load from the downloaded directory, not the repo id: the pipeline resolves its
+# sub-checkpoints ("ckpts/...") relative to what it was given, and a repo id makes
+# it ask the Hub for a repository called "ckpts/...".
+from huggingface_hub import snapshot_download
+local_model = snapshot_download("microsoft/TRELLIS.2-4B", max_workers=8)
+# One checkpoint is referenced across repositories; fetch just that subfolder so the
+# loader's Hub fallback resolves quickly instead of pulling a whole second model.
+snapshot_download("microsoft/TRELLIS-image-large", max_workers=8,
+                  allow_patterns=["ckpts/ss_dec_conv3d_16l8_fp16*"])
+
+# The pipeline config names two gated repositories (Meta's DINOv3, BRIA's RMBG-2.0).
+# There are no Hugging Face credentials in a Kaggle kernel, so point them at the
+# ungated equivalents - the same substitution the desktop installer makes.
+import glob as _glob
+for cfg in _glob.glob(local_model + "/*.json"):
+    txt = open(cfg).read()
+    fixed = (txt.replace("facebook/dinov3-vitl16-pretrain-lvd1689m",
+                         "camenduru/dinov3-vitl16-pretrain-lvd1689m")
+                .replace("briaai/RMBG-2.0", "ZhengPeng7/BiRefNet"))
+    if fixed != txt:
+        open(cfg, "w").write(fixed)
+        print("repointed", cfg.split("/")[-1], "at ungated model sources", flush=True)
+print("weights at", local_model, "|", round(time.time()-T0), "s", flush=True)
+pipe = Trellis2ImageTo3DPipeline.from_pretrained(local_model)
 pipe.cuda()
 out = pipe.run(Image.open("/kaggle/working/input.jpg"), seed=42, pipeline_type="${pipeline}")
 mesh = out[0] if isinstance(out, list) else out

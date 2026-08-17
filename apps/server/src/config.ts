@@ -48,6 +48,8 @@ export const config = {
   kaggle: {
     /** Prebuilt CUDA extension wheels; without them every run compiles for ~25 min. */
     wheelsDataset: env('SCANFORGE_KAGGLE_WHEELS', ''),
+    /** One reused notebook: its accelerator choice is a per-notebook UI setting. */
+    kernelSlug: env('SCANFORGE_KAGGLE_KERNEL', 'scanforge-run'),
     pollMs: envInt('SCANFORGE_KAGGLE_POLL_MS', 15_000),
     timeoutMinutes: envInt('SCANFORGE_KAGGLE_TIMEOUT_MIN', 45),
   },

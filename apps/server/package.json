@@ -16,7 +16,8 @@
     "@fastify/multipart": "^9.0.1",
     "@fastify/static": "^8.0.3",
     "@scanforge/shared": "*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
