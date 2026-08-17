@@ -1,4 +1,4 @@
-import type { HealthResponse, JobOptions, JobRecord } from '@scanforge/shared';
+import type { EngineEvent, EngineState, HealthResponse, JobOptions, JobRecord } from '@scanforge/shared';
 import { getApiBase } from './backend';
 
 /** Same-origin when the SCANFORGE server serves this page; absolute otherwise. */
@@ -73,6 +73,27 @@ export const api = {
 
   async deleteJob(jobId: string): Promise<void> {
     await fetch(`${base()}/jobs/${jobId}`, { method: 'DELETE' });
+  },
+
+  async engineState(): Promise<EngineState> {
+    return json<EngineState>(await fetch(`${base()}/engine`));
+  },
+
+  async installEngine(): Promise<EngineState> {
+    return json<EngineState>(await fetch(`${base()}/engine/install`, { method: 'POST' }));
+  },
+
+  /** Live setup progress. */
+  streamEngine(onEvent: (event: EngineEvent) => void): () => void {
+    const source = new EventSource(`${base()}/engine/events`);
+    source.onmessage = (event) => {
+      try {
+        onEvent(JSON.parse(event.data) as EngineEvent);
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    return () => source.close();
   },
 
   fileUrl(jobId: string, name: string, download = false): string {

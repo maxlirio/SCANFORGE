@@ -35,14 +35,18 @@ cp -R build/app/SCANFORGE-darwin-arm64/SCANFORGE.app /Applications/
 Open it once from Applications, then right-click its dock icon → *Options* →
 *Keep in Dock*.
 
-**2. The 3D engine** (once, ~16 GB of model weights)
+**2. The 3D engine — the app does this itself**
 
-TRELLIS is not bundled — it is large and updates independently. Follow
-[docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md); it takes about fifteen minutes and
-ends with the app reporting a green *TRELLIS.2 on this machine's GPU*.
+On first launch it offers *Install the 3D engine* and handles everything: a Python
+runtime if this Mac hasn't got a suitable one, the engine source, PyTorch, and
+~16 GB of model weights. No terminal, no package manager, **no account**. Expect
+20–40 minutes once; it resumes if interrupted, and later launches start straight up.
 
-Requirements: Apple Silicon, macOS 14+, ~20 GB free disk, Python 3.11. Verified on
-an M4 / 16 GB / macOS 26.3.
+Requirements: Apple Silicon, macOS 14+, ~20 GB free disk. Verified on an
+M4 / 16 GB / macOS 26.3.
+
+[docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md) documents what the installer does,
+and how to do it by hand if you'd rather.
 
 ---
 
@@ -141,6 +145,9 @@ without an Apple GPU.
   arbitrary. Use the photogrammetry engine if that matters.
 - **One object per photo.**
 - The app is **unsigned**, so the first launch needs right-click → *Open*.
+- The installer uses **ungated model mirrors** where the official repositories need
+  approval (Meta gates DINOv3 behind manual review). If you have that approval, it
+  detects it and uses the official ones instead.
 - TRELLIS's own texture baker is broken on Apple Silicon without full Xcode;
   SCANFORGE ships a corrected one (`pipeline/scanforge/trellis_bake.py`), and
   [docs/TRELLIS_LOCAL.md](docs/TRELLIS_LOCAL.md) explains why.

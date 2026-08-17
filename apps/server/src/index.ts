@@ -11,6 +11,7 @@ import { JobManager } from './jobs.js';
 import { ColmapLocalProvider } from './providers/colmapLocal.js';
 import { ReplicateProvider } from './providers/replicate.js';
 import { TrellisLocalProvider } from './providers/trellisLocal.js';
+import { EngineInstaller } from './engine/install.js';
 import type { ReconstructionProvider } from './providers/types.js';
 
 const MIME: Record<string, string> = {
@@ -42,6 +43,35 @@ async function main() {
   const providers = new Map(providerList.map((p) => [p.id, p]));
   const jobs = new JobManager(storage, providers);
   await jobs.reconcileOnBoot();
+
+  // First-run engine setup: the app ships without TRELLIS and installs it here.
+  const engine = new EngineInstaller();
+  await engine.refresh();
+
+  app.get('/api/engine', async () => engine.refresh());
+
+  app.post('/api/engine/install', async () => {
+    void engine.install();          // long-running; progress arrives over SSE
+    return engine.snapshot;
+  });
+
+  app.get('/api/engine/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    const send = (payload: unknown) => reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    send({ type: 'state', state: engine.snapshot });
+    const unsubscribe = engine.subscribe((event) => send(event));
+    const heartbeat = setInterval(() => reply.raw.write(': ping\n\n'), 15_000);
+    request.raw.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+    return reply;
+  });
 
   app.get('/api/health', async (): Promise<HealthResponse> => {
     const statuses = await Promise.all(providerList.map((p) => p.probe()));

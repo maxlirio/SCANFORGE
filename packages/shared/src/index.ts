@@ -211,3 +211,43 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+
+// ---------------------------------------------------------------------------
+// First-run engine installation (desktop app)
+// ---------------------------------------------------------------------------
+
+export type EngineStepId = 'python' | 'source' | 'deps' | 'patch' | 'weights' | 'verify';
+
+export const ENGINE_STEP_LABELS: Record<EngineStepId, string> = {
+  python: 'Python runtime',
+  source: 'Engine source',
+  deps: 'PyTorch and dependencies',
+  patch: 'Apple Silicon fixes',
+  weights: 'Model weights',
+  verify: 'GPU check',
+};
+
+export const ENGINE_STEP_ORDER: EngineStepId[] = [
+  'python', 'source', 'deps', 'patch', 'weights', 'verify',
+];
+
+export interface EngineState {
+  installed: boolean;
+  installing: boolean;
+  step?: EngineStepId;
+  message?: string;
+  progress?: number | null;
+  error?: string;
+  root: string;
+  downloadEstimateGb: number;
+  licenceNote: string;
+}
+
+export type EngineEvent =
+  | { type: 'step'; step: EngineStepId; status: 'start' | 'progress' | 'end';
+      progress?: number | null; message?: string }
+  | { type: 'log'; message: string }
+  | { type: 'done'; message?: string }
+  | { type: 'error'; message?: string; detail?: string }
+  | { type: 'state'; state: EngineState };

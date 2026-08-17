@@ -6,9 +6,10 @@ import { CaptureView, type CapturedPhoto } from './components/CaptureView';
 import { ProcessingView } from './components/ProcessingView';
 import { ResultView } from './components/ResultView';
 import { DesktopHome, type ChosenPhoto } from './components/DesktopHome';
+import { EngineSetup } from './components/EngineSetup';
 import { IS_DESKTOP } from './lib/desktop';
 
-type Screen = 'landing' | 'home' | 'capture' | 'processing' | 'result';
+type Screen = 'landing' | 'setup' | 'home' | 'capture' | 'processing' | 'result';
 
 const DEFAULT_OPTIONS: JobOptions = {
   provider: 'colmap-local',
@@ -29,6 +30,16 @@ export default function App() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const selectedProvider = health?.providers.find((p) => p.id === options.provider);
   const submittingRef = useRef(false);
+
+  // In the app, a missing engine is the first thing to deal with.
+  useEffect(() => {
+    if (!IS_DESKTOP) return;
+    api.engineState()
+      .then((state) => {
+        if (!state.installed) setScreen('setup');
+      })
+      .catch(() => undefined);
+  }, []);
 
   // Health decides which providers the landing page can offer.
   useEffect(() => {
@@ -88,8 +99,8 @@ export default function App() {
   useEffect(() => () => unsubscribeRef.current?.(), []);
 
   const handleFinishCapture = useCallback(async (photos: CapturedPhoto[]) => {
-    // One job at a time, no matter what asks: a stray duplicate here costs the
-    // user another ten minutes of GPU time.
+    // Guard only the submission itself, so a double-click cannot create two jobs
+    // from one intent. Starting another job later is fine - the server queues it.
     if (submittingRef.current) return;
     submittingRef.current = true;
     setFatal('');
@@ -105,6 +116,7 @@ export default function App() {
       const started = await api.startJob(created.id);
       setJob(started);
       watchJob(created.id);
+      submittingRef.current = false;
       photos.forEach((p) => URL.revokeObjectURL(p.url));
     } catch (err) {
       setUploadProgress(null);
@@ -136,6 +148,14 @@ export default function App() {
           {fatal}
           <button className="linkbtn" onClick={() => setFatal('')}>dismiss</button>
         </div>
+      )}
+
+      {screen === 'setup' && (
+        <EngineSetup onReady={() => {
+          // Re-probe: the provider only becomes available once the engine exists.
+          void api.health().then(setHealth).catch(() => undefined);
+          setScreen('home');
+        }} />
       )}
 
       {screen === 'home' && (
